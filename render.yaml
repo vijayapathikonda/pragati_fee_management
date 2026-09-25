@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: pragathi-school-fee-api
+    runtime: python
+    plan: free
+    region: singapore # or frankfurt, oregon, ohio
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: gdrive
+      - key: GDRIVE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GDRIVE_FOLDER_ID
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "480"

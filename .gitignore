@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+**/node_modules/
+package-lock.json
+
+# Build outputs & Bundlers
+dist/
+**/dist/
+build/
+**/build/
+.output/
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
+
+# Python cache & compiled files
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+ENV/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+
+# Temporary / Office lock files
+~$*.xlsx
+~$*.docx
+~$*.pptx
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment variables & secrets (keep example/template if needed)
+.env.local
+.env.*.local
+tools/keys/
+*.lic
+uploads/
+**/uploads/
+backups/*.sql
+backups/*.zip
+dist_package/
+*.db
+*.sqlite
+*.sqlite3
+*service_account*.json
+gdrive_credentials.json
+client_secret*.json
+
+
+

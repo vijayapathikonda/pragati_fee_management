@@ -1,0 +1,50 @@
+# =========================================================================
+# Stage 1: Build & Cythonize Proprietary Python Code to Native C Binaries
+# =========================================================================
+FROM python:3.13-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libmariadb-dev \
+    pkg-config \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+# Pre-build binary wheels for fast runtime installation
+RUN pip install --no-cache-dir cython setuptools wheel
+RUN pip wheel --no-cache-dir --wheel-dir=/wheels -r requirements.txt
+
+# Copy backend source code into builder
+COPY . .
+
+# Run compilation script: compiles all app/**/*.py into .so and deletes .py files
+RUN python compile_cython.py
+
+# =========================================================================
+# Stage 2: Clean, Zero-Source Production Runtime Image
+# =========================================================================
+FROM python:3.13-slim AS runner
+
+WORKDIR /app
+
+# Install runtime database driver only (no compilers, no gcc, no build tools)
+RUN apt-get update && apt-get install -y \
+    libmariadb3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pre-built python wheels
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/* && rm -rf /wheels
+
+# Copy only the compiled binaries and structure from builder (NO .py source files!)
+COPY --from=builder /build/app /app/app
+COPY --from=builder /build/alembic.ini /app/alembic.ini
+COPY --from=builder /build/alembic /app/alembic
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

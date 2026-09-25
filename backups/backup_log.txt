@@ -1,0 +1,14 @@
+[Wed 09/16/2026  8:28:53.16] Starting scheduled database backup... 
+mysqldump: [Warning] Using a password on the command line interface can be insecure.
+[SUCCESS] Backup created: D:\personal\school\repo\fee_management\backups\school_fee_backup_~0,4-~4,2-~6,2_~8,2-~10,2-~12,2.sql (184036 bytes
+[Wed 09/16/2026  8:28:54.05] SUCCESS: Backup created (D:\personal\school\repo\fee_management\backups\school_fee_backup_~0,4-~4,2-~6,2_~8,2-~10,2-~12,2.sql, 184036 bytes
+[Wed 09/16/2026  8:28:54.06] FAILED: Dump file is empty or too small 
+[Wed 09/16/2026  8:29:11.40] Starting scheduled database backup... 
+mysqldump: [Warning] Using a password on the command line interface can be insecure.
+[Wed 09/16/2026  8:29:11.98] SUCCESS: Backup created: D:\personal\school\repo\fee_management\backups\school_fee_backup_2026-09-16_08-29-11.sql [184036 bytes] 
+[Wed 09/16/2026  8:33:15.79] Starting scheduled database backup... 
+mysqldump: [Warning] Using a password on the command line interface can be insecure.
+[Wed 09/16/2026  8:33:16.32] SUCCESS: Backup created: D:\personal\school\repo\fee_management\backups\school_fee_backup_2026-09-16_08-33-15.sql [184036 bytes] 
+[Wed 09/16/2026 11:39:26.87] Starting scheduled database backup... 
+mysqldump: [Warning] Using a password on the command line interface can be insecure.
+[Wed 09/16/2026 11:39:27.90] SUCCESS: Backup created: D:\personal\school\repo\fee_management\backups\school_fee_backup_2026-09-16_11-39-26.sql [196492 bytes] 
