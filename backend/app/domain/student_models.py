@@ -34,9 +34,9 @@ class Student(Base):
     grade_id = Column(Integer, ForeignKey("grades.id"), nullable=False)
     section_id = Column(Integer, ForeignKey("sections.id"), nullable=True)
 
-    academic_year = relationship("AcademicYear")
-    grade = relationship("Grade")
-    section = relationship("Section")
+    academic_year = relationship("AcademicYear", lazy="joined")
+    grade = relationship("Grade", lazy="joined")
+    section = relationship("Section", lazy="joined")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

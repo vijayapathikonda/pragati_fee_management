@@ -76,10 +76,10 @@ class StudentValidatorMixin(BaseModel):
                 return None
         return v
 
-class StudentBase(StudentValidatorMixin):
+class StudentBase(BaseModel):
     first_name: str
     last_name: Optional[str] = ""
-    date_of_birth: date
+    date_of_birth: Optional[date] = None
     serial_number: Optional[int] = None
     gender: Optional[str] = None
     father_name: Optional[str] = None
@@ -87,14 +87,16 @@ class StudentBase(StudentValidatorMixin):
     mother_name: Optional[str] = None
     mother_contact_number: Optional[str] = None
     contact_number: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     address: Optional[str] = None
-    status: StudentStatus = StudentStatus.ACTIVE
+    status: Optional[StudentStatus] = StudentStatus.ACTIVE
     academic_year_id: int
     grade_id: int
     section_id: Optional[int] = None
 
-class StudentCreate(StudentBase):
+class StudentCreate(StudentBase, StudentValidatorMixin):
+    date_of_birth: date
+    email: Optional[EmailStr] = None
     admission_number: Optional[str] = None
 
 class StudentUpdate(StudentValidatorMixin):
@@ -126,3 +128,4 @@ class StudentResponse(StudentBase):
     section: Optional[SectionResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+

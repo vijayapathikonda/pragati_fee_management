@@ -55,9 +55,12 @@ class StudentRepository(BaseRepository[Student, StudentCreate, StudentUpdate]):
             query = query.order_by(asc(Student.serial_number), asc(Student.id))
 
 
-        total = query.count()
         skip = (page - 1) * size if page > 0 else 0
         items = query.offset(skip).limit(size).all()
+        if skip == 0 and len(items) < size:
+            total = len(items)
+        else:
+            total = query.order_by(None).count()
         
         return items, total
 

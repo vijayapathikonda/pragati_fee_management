@@ -1,6 +1,7 @@
+import time
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import List, Type, Any, Optional
+from typing import List, Type, Any, Optional, Dict, Tuple
 from pydantic import BaseModel
 
 from app.infrastructure.database import get_db
@@ -18,6 +19,8 @@ def create_master_router(
     search_fields: List[str]
 ) -> APIRouter:
     router = APIRouter()
+    _list_cache: Dict[Tuple, Tuple[dict, float]] = {}
+    _CACHE_TTL = 60.0
 
     @router.get("", response_model=dict, include_in_schema=False)
     @router.get("/", response_model=dict)
@@ -30,6 +33,12 @@ def create_master_router(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
     ):
+        cache_key = (page, size, search or "", sort_by or "", sort_order)
+        now = time.time()
+        cached = _list_cache.get(cache_key)
+        if cached and (now - cached[1]) < _CACHE_TTL:
+            return cached[0]
+
         if getattr(repo.model, "__tablename__", "") == "discount_types":
             from app.services.fee_service import FeeService
             FeeService.ensure_default_discounts(db)
@@ -44,12 +53,14 @@ def create_master_router(
             sort_order=sort_order
         )
         data = [response_schema.model_validate(item).model_dump() for item in items]
-        return {
+        result = {
             "data": data,
             "total": total,
             "page": page,
             "size": size
         }
+        _list_cache[cache_key] = (result, now)
+        return result
 
     @router.get("/export/excel")
     def export_excel(
@@ -79,7 +90,9 @@ def create_master_router(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
     ):
-        return repo.create(db, obj_in=item_in)
+        res = repo.create(db, obj_in=item_in)
+        _list_cache.clear()
+        return res
 
     @router.put("/{id}", response_model=response_schema)
     def update(
@@ -91,7 +104,9 @@ def create_master_router(
         item = repo.get(db, id=id)
         if not item:
             raise NotFoundException("Item not found")
-        return repo.update(db, db_obj=item, obj_in=item_in)
+        res = repo.update(db, db_obj=item, obj_in=item_in)
+        _list_cache.clear()
+        return res
 
     @router.delete("/{id}", response_model=response_schema)
     def delete(
@@ -102,6 +117,9 @@ def create_master_router(
         item = repo.get(db, id=id)
         if not item:
             raise NotFoundException("Item not found")
-        return repo.remove(db, id=id)
+        res = repo.remove(db, id=id)
+        _list_cache.clear()
+        return res
 
     return router
+

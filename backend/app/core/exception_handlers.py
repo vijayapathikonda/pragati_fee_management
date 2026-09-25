@@ -4,6 +4,16 @@ from fastapi.exceptions import RequestValidationError
 from app.core.exceptions import AppException
 from loguru import logger
 
+def _build_cors_headers(request: Request) -> dict:
+    origin = request.headers.get("origin")
+    if origin:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    return {"Access-Control-Allow-Origin": "*"}
+
 def add_exception_handlers(app: FastAPI):
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -28,6 +38,7 @@ def add_exception_handlers(app: FastAPI):
                 "errors": field_errors,
                 "raw_errors": exc.errors()
             },
+            headers=_build_cors_headers(request),
         )
 
     @app.exception_handler(AppException)
@@ -36,6 +47,7 @@ def add_exception_handlers(app: FastAPI):
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.message},
+            headers=_build_cors_headers(request),
         )
     
     @app.exception_handler(Exception)
@@ -44,4 +56,6 @@ def add_exception_handlers(app: FastAPI):
         return JSONResponse(
             status_code=500,
             content={"detail": f"Internal server error: {str(exc)}"},
+            headers=_build_cors_headers(request),
         )
+

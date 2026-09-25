@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # WhatsApp Receipt Notification Configuration
     WHATSAPP_ENABLED: bool = True
     SCHOOL_WHATSAPP_NUMBER: str = "919876543210"
-    PUBLIC_BASE_URL: str = "https://pragati-fee-management.onrender.com"
+    PUBLIC_BASE_URL: str = "https://fee-management-v415.onrender.com"
     # Option 1: Meta WhatsApp Cloud API
     WHATSAPP_PHONE_NUMBER_ID: Union[str, None] = None
     WHATSAPP_ACCESS_TOKEN: Union[str, None] = None
@@ -54,6 +54,8 @@ class Settings(BaseSettings):
         if url:
             if url.startswith("libsql://"):
                 url = url.replace("libsql://", "sqlite+libsql://")
+            elif url.startswith("mysql://"):
+                url = url.replace("mysql://", "mysql+pymysql://", 1)
             return url
         return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DATABASE}"
         
@@ -66,10 +68,17 @@ class Settings(BaseSettings):
                 origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
         else:
             origins = list(self.CORS_ORIGINS)
+        always_allowed = [
+            "https://fees.pragatividyalaya.in",
+            "http://fees.pragatividyalaya.in",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:8002",
+        ]
         if "*" not in origins:
-            for local_origin in ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8002"]:
-                if local_origin not in origins:
-                    origins.append(local_origin)
+            for allowed in always_allowed:
+                if allowed not in origins:
+                    origins.append(allowed)
         return origins
 
 settings = Settings()

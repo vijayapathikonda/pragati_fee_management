@@ -16,6 +16,15 @@ class LicenseStatus:
     UNLICENSED = "UNLICENSED"
 
 class LicenseService:
+    _cached_info: Optional[Dict[str, Any]] = None
+    _cached_at: float = 0.0
+    _CACHE_TTL_SECONDS: float = 60.0
+
+    @classmethod
+    def invalidate_cache(cls):
+        cls._cached_info = None
+        cls._cached_at = 0.0
+
     @classmethod
     def get_setting(cls, db: Session, key: str) -> Optional[str]:
         setting = db.query(SystemSettings).filter(
@@ -43,15 +52,20 @@ class LicenseService:
         db.commit()
 
     @classmethod
-    def get_license_info(cls, db: Session) -> Dict[str, Any]:
+    def get_license_info(cls, db: Session, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Calculates and returns the full license status, days remaining, and validation flags.
+        Uses a short in-memory cache (60s) to avoid hammering remote cloud databases on every page load.
         """
+        now_ts = time.time()
+        if not force_refresh and cls._cached_info is not None and (now_ts - cls._cached_at) < cls._CACHE_TTL_SECONDS:
+            return cls._cached_info
+
         current_server_id = HardwareService.get_server_id()
         raw_document = cls.get_setting(db, "license_document")
 
         if not raw_document:
-            return {
+            res = {
                 "status": LicenseStatus.UNLICENSED,
                 "message": "No license activated. Please upload a valid .lic file.",
                 "days_remaining": 0,
@@ -63,6 +77,9 @@ class LicenseService:
                 "current_server_id": current_server_id,
                 "is_write_allowed": False
             }
+            cls._cached_info = res
+            cls._cached_at = now_ts
+            return res
 
         try:
             license_data = json.loads(raw_document)
@@ -117,8 +134,9 @@ class LicenseService:
             }
 
         # 3. Check for Clock Rollback
-        now_epoch = int(time.time())
+        now_epoch = int(now_ts)
         last_seen_epoch_str = cls.get_setting(db, "license_last_seen_epoch")
+        last_seen_epoch = 0
         if last_seen_epoch_str:
             try:
                 last_seen_epoch = int(last_seen_epoch_str)
@@ -139,9 +157,12 @@ class LicenseService:
             except Exception:
                 pass
 
-        # Update high-water mark epoch
-        if now_epoch > int(last_seen_epoch_str or 0):
-            cls.set_setting(db, "license_last_seen_epoch", str(now_epoch), "License anti-rollback high-water epoch")
+        # Update high-water mark epoch at most once per hour (3600s) to avoid write-locking DB on GET requests
+        if (now_epoch - last_seen_epoch) > 3600:
+            try:
+                cls.set_setting(db, "license_last_seen_epoch", str(now_epoch), "License anti-rollback high-water epoch")
+            except Exception:
+                db.rollback()
 
         # 4. Check Expiry
         try:
@@ -164,7 +185,7 @@ class LicenseService:
             }
 
         if seconds_remaining <= 0:
-            return {
+            res = {
                 "status": LicenseStatus.EXPIRED,
                 "message": f"Annual software license expired on {expires_dt.strftime('%d %B %Y')}. Please renew to resume write operations.",
                 "days_remaining": 0,
@@ -176,13 +197,16 @@ class LicenseService:
                 "current_server_id": current_server_id,
                 "is_write_allowed": False
             }
+            cls._cached_info = res
+            cls._cached_at = now_ts
+            return res
 
         days_remaining = seconds_remaining // 86400
         hours_remaining = (seconds_remaining % 86400) // 3600
 
         # Warning threshold: 30 days
         if days_remaining <= 30:
-            return {
+            res = {
                 "status": LicenseStatus.EXPIRING_SOON,
                 "message": f"License expires in {days_remaining} day(s) on {expires_dt.strftime('%d %B %Y')}. Please renew to prevent service disruption.",
                 "days_remaining": days_remaining,
@@ -194,8 +218,11 @@ class LicenseService:
                 "current_server_id": current_server_id,
                 "is_write_allowed": True
             }
+            cls._cached_info = res
+            cls._cached_at = now_ts
+            return res
 
-        return {
+        res = {
             "status": LicenseStatus.ACTIVE,
             "message": f"License is active and valid until {expires_dt.strftime('%d %B %Y')}.",
             "days_remaining": days_remaining,
@@ -207,6 +234,9 @@ class LicenseService:
             "current_server_id": current_server_id,
             "is_write_allowed": True
         }
+        cls._cached_info = res
+        cls._cached_at = now_ts
+        return res
 
     @classmethod
     def activate_license(cls, file_content: bytes, db: Session, user_id: Optional[int] = None) -> Dict[str, Any]:
@@ -245,6 +275,7 @@ class LicenseService:
         # Store the active license document
         cls.set_setting(db, "license_document", json.dumps(license_doc), "Active cryptographic license document")
         cls.set_setting(db, "license_last_seen_epoch", str(int(time.time())), "License anti-rollback high-water epoch")
+        cls.invalidate_cache()
 
         # Audit Log
         try:
@@ -258,4 +289,4 @@ class LicenseService:
         except Exception:
             pass
 
-        return cls.get_license_info(db)
+        return cls.get_license_info(db, force_refresh=True)

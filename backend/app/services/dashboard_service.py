@@ -1,8 +1,9 @@
+import time
 from datetime import datetime, date, timedelta
 from decimal import Decimal
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, and_, or_, extract
+from sqlalchemy import func, desc, and_, or_, extract, case
 from app.domain.student_models import Student, StudentStatus
 from app.domain.fee_models import FeeReceipt, FeePaymentItem, FeeAssignment, ReceiptStatus
 from app.domain.master_models import FeeCategory, PaymentMode, Grade
@@ -12,6 +13,13 @@ from app.schemas.dashboard import (
 )
 
 class DashboardService:
+    _summary_cache: Dict[Tuple, Tuple[DashboardSummary, float]] = {}
+    _CACHE_TTL: float = 15.0
+
+    @classmethod
+    def invalidate_cache(cls):
+        cls._summary_cache.clear()
+
     @staticmethod
     def get_summary(
         db: Session,
@@ -21,7 +29,12 @@ class DashboardService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None
     ) -> DashboardSummary:
-        
+        cache_key = (academic_year_id, grade_id, section_id, str(start_date), str(end_date))
+        now_ts = time.time()
+        cached = DashboardService._summary_cache.get(cache_key)
+        if cached and (now_ts - cached[1]) < DashboardService._CACHE_TTL:
+            return cached[0]
+
         # Base Filters for Students & Assignments
         student_filters = []
         assignment_filters = []
@@ -41,42 +54,36 @@ class DashboardService:
         if end_date:
             receipt_filters.append(func.date(FeeReceipt.created_at) <= end_date)
 
-        # Helpers
-        def apply_student_join(query):
-            if grade_id or section_id or academic_year_id:
-                return query.join(Student, Student.id == getattr(query.column_descriptions[0]['type'], 'student_id'))
-            return query
-            
         def get_decimal(val):
             return Decimal(str(val)) if val else Decimal("0.00")
 
-        # 1. Cards
-        # Total Students
-        q_students = db.query(func.count(Student.id)).filter(*student_filters)
-        total_students = q_students.scalar() or 0
-        
-        # Active Students
-        q_active_students = db.query(func.count(Student.id)).filter(
-            *student_filters,
-            Student.status == StudentStatus.ACTIVE
-        )
-        active_students = q_active_students.scalar() or 0
+        # 1. Cards — Combined Student Counts (1 query instead of 2)
+        stu_counts = db.query(
+            func.count(Student.id),
+            func.sum(case((Student.status == StudentStatus.ACTIVE, 1), else_=0))
+        ).filter(*student_filters).first()
+        total_students = int(stu_counts[0] or 0) if stu_counts else 0
+        active_students = int(stu_counts[1] or 0) if stu_counts else 0
 
-        # Collections (Today, Monthly, Yearly)
+        # Collections (Today, Monthly, Yearly, Total Count — 1 query instead of 4)
         today = datetime.now().date()
         current_month = today.month
         current_year = today.year
 
-        # We need a subquery or join to filter receipts by student grade/section if needed
-        # But `FeeReceipt` has `student_id`.
-        q_receipts_base = db.query(FeeReceipt).filter(*receipt_filters)
+        q_receipts_agg = db.query(
+            func.sum(case((func.date(FeeReceipt.created_at) == today, FeeReceipt.total_amount), else_=0)),
+            func.sum(case((and_(extract('month', FeeReceipt.created_at) == current_month, extract('year', FeeReceipt.created_at) == current_year), FeeReceipt.total_amount), else_=0)),
+            func.sum(case((extract('year', FeeReceipt.created_at) == current_year, FeeReceipt.total_amount), else_=0)),
+            func.count(FeeReceipt.id)
+        ).filter(*receipt_filters)
         if student_filters:
-            q_receipts_base = q_receipts_base.join(Student, Student.id == FeeReceipt.student_id).filter(*student_filters)
+            q_receipts_agg = q_receipts_agg.join(Student, Student.id == FeeReceipt.student_id).filter(*student_filters)
 
-        today_collection = get_decimal(q_receipts_base.filter(func.date(FeeReceipt.created_at) == today).with_entities(func.sum(FeeReceipt.total_amount)).scalar())
-        monthly_collection = get_decimal(q_receipts_base.filter(extract('month', FeeReceipt.created_at) == current_month, extract('year', FeeReceipt.created_at) == current_year).with_entities(func.sum(FeeReceipt.total_amount)).scalar())
-        yearly_collection = get_decimal(q_receipts_base.filter(extract('year', FeeReceipt.created_at) == current_year).with_entities(func.sum(FeeReceipt.total_amount)).scalar())
-        total_receipts = q_receipts_base.count()
+        rec_agg = q_receipts_agg.first()
+        today_collection = get_decimal(rec_agg[0] if rec_agg else 0)
+        monthly_collection = get_decimal(rec_agg[1] if rec_agg else 0)
+        yearly_collection = get_decimal(rec_agg[2] if rec_agg else 0)
+        total_receipts = int(rec_agg[3] or 0) if rec_agg else 0
 
         # Outstanding
         q_outstanding = db.query(func.sum(FeeAssignment.net_amount - FeeAssignment.paid_amount)).filter(*assignment_filters)
@@ -225,4 +232,7 @@ class DashboardService:
             top_defaulters=top_defaulters
         )
 
-        return DashboardSummary(cards=cards, charts=charts, lists=lists)
+        summary_res = DashboardSummary(cards=cards, charts=charts, lists=lists)
+        DashboardService._summary_cache[cache_key] = (summary_res, now_ts)
+        return summary_res
+

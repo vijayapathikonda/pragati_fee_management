@@ -51,9 +51,13 @@ DEFAULT_DISCOUNT_PLANS = [
 ]
 
 class FeeService:
+    _discounts_seeded: bool = False
+
     @staticmethod
     def ensure_default_discounts(db: Session) -> None:
         """Ensures the 5 standard school discount plans exist in discount_types."""
+        if FeeService._discounts_seeded:
+            return
         try:
             existing_list = db.query(DiscountType).all()
             existing_by_name = {d.name.strip().lower(): d for d in existing_list}
@@ -67,6 +71,7 @@ class FeeService:
 
             if changed:
                 db.commit()
+            FeeService._discounts_seeded = True
         except Exception:
             db.rollback()
 

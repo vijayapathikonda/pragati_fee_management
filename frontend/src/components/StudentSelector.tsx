@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Grid,
   FormControl,
@@ -31,54 +31,78 @@ export default function StudentSelector({ onStudentSelect, selectedStudentId = '
   const [options, setOptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   
   // The currently selected student object
   const [value, setValue] = useState<any | null>(null);
+  const requestSeqRef = useRef(0);
 
   // Fetch Master Data on Mount
   useEffect(() => {
-    api.get('/masters/academic-years?size=100').then(res => setAcademicYears(res.data.data || []));
-    api.get('/masters/grades?size=100').then(res => setGrades(res.data.data || []));
+    api.get('/masters/academic-years?size=100&sort_by=id&sort_order=asc')
+      .then(res => setAcademicYears(res.data.data || []))
+      .catch(err => console.error('Failed to load academic years:', err));
+    api.get('/masters/grades?size=100&sort_by=id&sort_order=asc')
+      .then(res => setGrades(res.data.data || []))
+      .catch(err => console.error('Failed to load grades:', err));
   }, []);
 
-  // Fetch Students based on filters and search input
+  // Fetch Students based on filters and typed search input (NOT the selected option's display label)
   useEffect(() => {
-    let active = true;
-
+    const reqId = ++requestSeqRef.current;
     setLoading(true);
 
     const delayDebounceFn = setTimeout(async () => {
       try {
         const params: any = {
           page: 1,
-          size: 50,
-          search: inputValue || undefined,
-          academic_year_id: academicYearId === 'all' ? undefined : academicYearId,
-          grade_id: gradeId === 'all' ? undefined : gradeId,
+          size: 200,
+          search: searchQuery.trim() || undefined,
+          academic_year_id: academicYearId === 'all' ? undefined : Number(academicYearId),
+          grade_id: gradeId === 'all' ? undefined : Number(gradeId),
         };
         const response = await getStudents(params);
-        if (active) {
+        if (reqId === requestSeqRef.current) {
           setOptions(response.data || []);
         }
       } catch (error) {
         console.error('Failed to fetch students', error);
       } finally {
-        if (active) setLoading(false);
+        if (reqId === requestSeqRef.current) {
+          setLoading(false);
+        }
       }
-    }, 300);
+    }, searchQuery ? 250 : 0);
 
     return () => {
-      active = false;
       clearTimeout(delayDebounceFn);
     };
-  }, [inputValue, academicYearId, gradeId, value]);
+  }, [searchQuery, academicYearId, gradeId]);
 
   // Handle external selectedStudentId changes (e.g. resets)
   useEffect(() => {
     if (!selectedStudentId) {
       setValue(null);
+      setInputValue('');
+      setSearchQuery('');
     }
   }, [selectedStudentId]);
+
+  const handleAcademicYearChange = (newYearId: string) => {
+    setAcademicYearId(newYearId);
+    setValue(null);
+    setInputValue('');
+    setSearchQuery('');
+    onStudentSelect('');
+  };
+
+  const handleGradeChange = (newGradeId: string) => {
+    setGradeId(newGradeId);
+    setValue(null);
+    setInputValue('');
+    setSearchQuery('');
+    onStudentSelect('');
+  };
 
   return (
     <Grid container spacing={2}>
@@ -88,7 +112,7 @@ export default function StudentSelector({ onStudentSelect, selectedStudentId = '
           <Select
             value={academicYearId}
             label="Academic Year"
-            onChange={(e) => setAcademicYearId(e.target.value)}
+            onChange={(e) => handleAcademicYearChange(String(e.target.value))}
           >
             <MenuItem value="all"><em>All Years</em></MenuItem>
             {academicYears.map((ay) => (
@@ -104,7 +128,7 @@ export default function StudentSelector({ onStudentSelect, selectedStudentId = '
           <Select
             value={gradeId}
             label="Grade"
-            onChange={(e) => setGradeId(e.target.value)}
+            onChange={(e) => handleGradeChange(String(e.target.value))}
           >
             <MenuItem value="all"><em>All Grades</em></MenuItem>
             {grades.map((g) => (
@@ -123,15 +147,23 @@ export default function StudentSelector({ onStudentSelect, selectedStudentId = '
           onClose={() => setOpen(false)}
           isOptionEqualToValue={(option, val) => option.id === val.id}
           getOptionLabel={(option) => `${option.first_name} ${option.last_name || ''} (${option.admission_number}) - ${option.grade?.name || ''}`}
+          filterOptions={(x) => x}
           options={options}
           loading={loading}
           value={value}
+          inputValue={inputValue}
           onChange={(_, newValue) => {
             setValue(newValue);
+            setSearchQuery('');
             onStudentSelect(newValue ? newValue.id : '');
           }}
-          onInputChange={(_, newInputValue) => {
+          onInputChange={(_, newInputValue, reason) => {
             setInputValue(newInputValue);
+            if (reason === 'input') {
+              setSearchQuery(newInputValue);
+            } else if (reason === 'clear') {
+              setSearchQuery('');
+            }
           }}
           renderInput={(params) => (
             <TextField
@@ -153,3 +185,4 @@ export default function StudentSelector({ onStudentSelect, selectedStudentId = '
     </Grid>
   );
 }
+

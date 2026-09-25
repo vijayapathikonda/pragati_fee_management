@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 import os
 from app.core.config import settings
 from app.core.logger import setup_logger
@@ -30,17 +31,21 @@ for _students_dir in ["uploads/students", "../frontend/public/students", "fronte
         break
 
 
+from app.core.licensing.license_middleware import LicenseEnforcementMiddleware
+
+app.add_middleware(LicenseEnforcementMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Add CORSMiddleware LAST so it wraps all other middlewares (outermost layer)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.parsed_cors_origins,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-from app.core.licensing.license_middleware import LicenseEnforcementMiddleware
-
-app.add_middleware(LicenseEnforcementMiddleware)
 add_exception_handlers(app)
 
 app.include_router(api_router, prefix="/api")

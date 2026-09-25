@@ -51,11 +51,13 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         elif hasattr(self.model, "id"):
             query = query.order_by(desc(self.model.id))
 
-        total = query.count()
-        
         # Ensure non-negative offset
         skip = (page - 1) * size if page > 0 else 0
         items = query.offset(skip).limit(size).all()
+        if skip == 0 and len(items) < size:
+            total = len(items)
+        else:
+            total = query.order_by(None).count()
         
         return items, total
 

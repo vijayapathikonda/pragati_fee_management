@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   Box, Button, Paper, TextField, Typography, Grid,
@@ -81,7 +81,7 @@ export default function FeeAssignmentPage() {
   // TAB 0: GRADE-LEVEL BATCH ASSIGNMENT STATE
   // -------------------------------------------------------------
   const [batchYearId, setBatchYearId] = useState<number | ''>('');
-  const [batchGradeId, setBatchGradeId] = useState<number | ''>(1); // Default Grade 1
+  const [batchGradeId, setBatchGradeId] = useState<number | ''>('');
   const [batchCategoryId, setBatchCategoryId] = useState<number | ''>('');
   const [commonAmount, setCommonAmount] = useState<string>('45000');
   const [batchDescription, setBatchDescription] = useState<string>('');
@@ -94,6 +94,7 @@ export default function FeeAssignmentPage() {
   const [submittingBatch, setSubmittingBatch] = useState<boolean>(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState<boolean>(false);
   const [batchResult, setBatchResult] = useState<any | null>(null);
+  const rosterRequestSeqRef = useRef(0);
 
   // -------------------------------------------------------------
   // TAB 1: INDIVIDUAL STUDENT ASSIGNMENT STATE
@@ -134,30 +135,38 @@ export default function FeeAssignmentPage() {
 
   // Load Masters
   useEffect(() => {
-    api.get('/masters/fee-categories?size=100').then(res => {
-      const cats = res.data.data || [];
-      setCategories(cats);
-      if (cats.length > 0) {
-        const tuition = cats.find((c: any) => c.name.toLowerCase().includes('tution') || c.name.toLowerCase().includes('tuition'));
-        setBatchCategoryId(tuition ? tuition.id : cats[0].id);
-      }
-    });
+    api.get('/masters/fee-categories?size=100')
+      .then(res => {
+        const cats = res.data.data || [];
+        setCategories(cats);
+        if (cats.length > 0) {
+          const tuition = cats.find((c: any) => c.name.toLowerCase().includes('tution') || c.name.toLowerCase().includes('tuition'));
+          setBatchCategoryId(tuition ? tuition.id : cats[0].id);
+        }
+      })
+      .catch(err => console.error('Failed to load fee categories:', err));
 
-    api.get('/masters/discount-types?size=100').then(res => setDiscountTypes(res.data.data || []));
+    api.get('/masters/discount-types?size=100')
+      .then(res => setDiscountTypes(res.data.data || []))
+      .catch(err => console.error('Failed to load discount types:', err));
 
-    api.get('/masters/academic-years?size=100&sort_by=id&sort_order=asc').then(res => {
-      const ays = res.data.data || [];
-      setAcademicYears(ays);
-      const active = ays.find((a: any) => a.is_active);
-      if (active) setBatchYearId(active.id);
-      else if (ays.length > 0) setBatchYearId(ays[ays.length - 1].id);
-    });
+    api.get('/masters/academic-years?size=100&sort_by=id&sort_order=asc')
+      .then(res => {
+        const ays = res.data.data || [];
+        setAcademicYears(ays);
+        const active = ays.find((a: any) => a.is_active);
+        if (active) setBatchYearId(active.id);
+        else if (ays.length > 0) setBatchYearId(ays[ays.length - 1].id);
+      })
+      .catch(err => console.error('Failed to load academic years:', err));
 
-    api.get('/masters/grades?size=100&sort_by=id&sort_order=asc').then(res => {
-      const gList = res.data.data || [];
-      setGrades(gList);
-      if (gList.length > 0) setBatchGradeId(gList[0].id);
-    });
+    api.get('/masters/grades?size=100&sort_by=id&sort_order=asc')
+      .then(res => {
+        const gList = res.data.data || [];
+        setGrades(gList);
+        if (gList.length > 0) setBatchGradeId(gList[0].id);
+      })
+      .catch(err => console.error('Failed to load grades:', err));
 
     // Default Due Date: 30 days from today
     const d = new Date();
@@ -200,12 +209,15 @@ export default function FeeAssignmentPage() {
     };
   };
 
-  // Load Roster for Batch Assignment
+  // Load Roster for Batch Assignment (with request sequence guard against stale grade responses)
   const loadBatchRoster = async () => {
     if (!batchYearId || !batchGradeId || !batchCategoryId) return;
+    const reqId = ++rosterRequestSeqRef.current;
     setLoadingRoster(true);
     try {
       const data = await getGradeFeeStatus(Number(batchYearId), Number(batchGradeId), Number(batchCategoryId));
+      if (reqId !== rosterRequestSeqRef.current) return;
+
       const defaultAmtNum = parseFloat(commonAmount) || 0;
       const allAlreadyAssigned = data.length > 0 && data.every((item: any) => item.is_assigned);
 
@@ -242,12 +254,15 @@ export default function FeeAssignmentPage() {
     } catch (err) {
       console.error('Failed to load grade fee status:', err);
     } finally {
-      setLoadingRoster(false);
+      if (reqId === rosterRequestSeqRef.current) {
+        setLoadingRoster(false);
+      }
     }
   };
 
   useEffect(() => {
     if (activeTab === 0 && batchYearId && batchGradeId && batchCategoryId) {
+      setSearchFilter('');
       loadBatchRoster();
     }
   }, [activeTab, batchYearId, batchGradeId, batchCategoryId]);

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.infrastructure.database import get_db
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, invalidate_user_cache
 from app.domain.models import User
 from app.schemas.user import UserResponse, UserCreate
 from app.core.security import get_password_hash
@@ -51,6 +51,7 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+    invalidate_user_cache()
     
     AuditService.log_action(db, "CREATE", f"User:{user.id}", current_user.id)
     return user
@@ -73,6 +74,7 @@ def update_user(
     user.role_id = user_in.role_id
     db.commit()
     db.refresh(user)
+    invalidate_user_cache()
     
     AuditService.log_action(db, "UPDATE", f"User:{user.id}", current_user.id)
     return user
@@ -92,6 +94,8 @@ def delete_user(
         
     db.delete(user)
     db.commit()
+    invalidate_user_cache()
     
     AuditService.log_action(db, "DELETE", f"User:{user_id}", current_user.id)
     return None
+

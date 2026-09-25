@@ -31,9 +31,9 @@ class FeeAssignment(Base):
 
     # Relationships
     student = relationship("Student")
-    academic_year = relationship("AcademicYear")
-    fee_category = relationship("FeeCategory")
-    discount_type = relationship("DiscountType")
+    academic_year = relationship("AcademicYear", lazy="joined")
+    fee_category = relationship("FeeCategory", lazy="joined")
+    discount_type = relationship("DiscountType", lazy="joined")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -60,12 +60,12 @@ class FeeReceipt(Base):
     cancellation_reason = Column(String(500), nullable=True)
 
     # Relationships
-    student = relationship("Student")
-    payment_mode = relationship("PaymentMode")
+    student = relationship("Student", lazy="joined")
+    payment_mode = relationship("PaymentMode", lazy="joined")
     collected_by = relationship("User", foreign_keys=[collected_by_id])
     cancelled_by = relationship("User", foreign_keys=[cancelled_by_id])
     
-    items = relationship("FeePaymentItem", back_populates="receipt", cascade="all, delete-orphan")
+    items = relationship("FeePaymentItem", back_populates="receipt", cascade="all, delete-orphan", lazy="joined")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -79,5 +79,6 @@ class FeePaymentItem(Base):
     amount_paid = Column(Numeric(10, 2), nullable=False)
 
     receipt = relationship("FeeReceipt", back_populates="items")
-    fee_assignment = relationship("FeeAssignment")
+    fee_assignment = relationship("FeeAssignment", lazy="joined")
+
 
