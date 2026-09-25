@@ -89,7 +89,7 @@ class PaymentService:
         try:
             pdf_path = PDFService.generate_receipt_pdf(
                 receipt=receipt,
-                student_name=f"{student.first_name} {student.last_name}",
+                student_name=f"{student.first_name} {student.last_name or ''}".strip(),
                 admission_number=student.admission_number
             )
             receipt.pdf_path = pdf_path
@@ -98,7 +98,66 @@ class PaymentService:
         except Exception as e:
             # We don't want to rollback the financial transaction if PDF generation fails.
             print(f"PDF Generation failed: {e}")
-            
+
+        # 5. Automatically dispatch WhatsApp receipt notification to Mother Contact Number
+        try:
+            from app.services.whatsapp_service import WhatsAppService
+            if getattr(obj_in, "send_whatsapp", True):
+                wa_info = WhatsAppService.send_receipt_to_mother(
+                    receipt=receipt,
+                    student=student,
+                    override_phone=getattr(obj_in, "mother_phone_override", None),
+                )
+            else:
+                contact = WhatsAppService.resolve_recipient_contact(
+                    student, override_phone=getattr(obj_in, "mother_phone_override", None)
+                )
+                msg = WhatsAppService.build_receipt_message(receipt, student)
+                import urllib.parse
+                phone = contact["phone"]
+                wa_info = {
+                    "whatsapp_sent": False,
+                    "whatsapp_status": "skipped",
+                    "recipient_phone": phone,
+                    "recipient_role": contact["recipient_role"],
+                    "recipient_name": contact["recipient_name"],
+                    "mother_name": student.mother_name,
+                    "mother_contact_number": student.mother_contact_number,
+                    "whatsapp_message": msg,
+                    "whatsapp_url": f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}" if phone else None,
+                }
+            for k, v in wa_info.items():
+                setattr(receipt, k, v)
+        except Exception as e:
+            print(f"WhatsApp dispatch failed: {e}")
+
+        return receipt
+
+    @staticmethod
+    def populate_whatsapp_metadata(receipt: FeeReceipt) -> FeeReceipt:
+        try:
+            from app.services.whatsapp_service import WhatsAppService
+            import urllib.parse
+            student = receipt.student
+            if student:
+                contact = WhatsAppService.resolve_recipient_contact(student)
+                phone = contact["phone"]
+                msg = WhatsAppService.build_receipt_message(receipt, student)
+                setattr(receipt, "whatsapp_sent", False)
+                setattr(receipt, "whatsapp_status", "ready_to_send" if phone else "missing_mother_phone")
+                setattr(receipt, "recipient_phone", phone)
+                setattr(receipt, "recipient_role", contact["recipient_role"])
+                setattr(receipt, "recipient_name", contact["recipient_name"])
+                setattr(receipt, "mother_name", student.mother_name)
+                setattr(receipt, "mother_contact_number", student.mother_contact_number)
+                setattr(receipt, "whatsapp_message", msg)
+                setattr(
+                    receipt,
+                    "whatsapp_url",
+                    f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}" if phone else f"https://wa.me/?text={urllib.parse.quote(msg)}",
+                )
+        except Exception as e:
+            print(f"Populate WhatsApp metadata failed: {e}")
         return receipt
 
     @staticmethod

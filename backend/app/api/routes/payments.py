@@ -22,13 +22,38 @@ def collect_fee(
 ):
     return PaymentService.collect_fee(db, obj_in=receipt_in, collected_by_id=current_user.id)
 
+class SendWhatsAppRequest(BaseModel):
+    phone_override: str | None = None
+
 @router.get("/student/{student_id}", response_model=List[FeeReceiptResponse])
 def get_student_receipts(
     student_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return receipt_repository.get_by_student(db, student_id=student_id)
+    receipts = receipt_repository.get_by_student(db, student_id=student_id)
+    return [PaymentService.populate_whatsapp_metadata(r) for r in receipts]
+
+@router.post("/{receipt_id}/send-whatsapp", response_model=FeeReceiptResponse)
+def send_receipt_whatsapp(
+    receipt_id: int,
+    request: SendWhatsAppRequest = SendWhatsAppRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.core.exceptions import NotFoundException
+    from app.services.whatsapp_service import WhatsAppService
+    receipt = receipt_repository.get(db, id=receipt_id)
+    if not receipt:
+        raise NotFoundException("Receipt not found")
+    wa_info = WhatsAppService.send_receipt_to_mother(
+        receipt=receipt,
+        student=receipt.student,
+        override_phone=request.phone_override,
+    )
+    for k, v in wa_info.items():
+        setattr(receipt, k, v)
+    return receipt
 
 @router.post("/{receipt_id}/cancel", response_model=FeeReceiptResponse)
 def cancel_receipt(

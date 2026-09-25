@@ -37,6 +37,7 @@ def batch_assign_fees(
 ):
     return FeeService.batch_assign_fees(db, request=request)
 
+@router.post("", response_model=FeeAssignmentResponse, include_in_schema=False)
 @router.post("/", response_model=FeeAssignmentResponse)
 def create_fee_assignment(
     assignment_in: FeeAssignmentCreate,

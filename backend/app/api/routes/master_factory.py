@@ -19,6 +19,7 @@ def create_master_router(
 ) -> APIRouter:
     router = APIRouter()
 
+    @router.get("", response_model=dict, include_in_schema=False)
     @router.get("/", response_model=dict)
     def get_all(
         page: int = 1,
@@ -29,6 +30,10 @@ def create_master_router(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
     ):
+        if getattr(repo.model, "__tablename__", "") == "discount_types":
+            from app.services.fee_service import FeeService
+            FeeService.ensure_default_discounts(db)
+
         items, total = repo.get_paginated(
             db, 
             page=page, 
@@ -67,6 +72,7 @@ def create_master_router(
             raise NotFoundException("Item not found")
         return item
 
+    @router.post("", response_model=response_schema, include_in_schema=False)
     @router.post("/", response_model=response_schema)
     def create(
         item_in: create_schema,

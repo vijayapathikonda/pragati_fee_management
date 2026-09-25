@@ -18,6 +18,7 @@ export default function StudentProfile() {
   const navigate = useNavigate();
   const [student, setStudent] = useState<any>(null);
   const [feeSummary, setFeeSummary] = useState<any>(null);
+  const [feeAssignments, setFeeAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [openEdit, setOpenEdit] = useState(false);
   const [editErrorMsg, setEditErrorMsg] = useState('');
@@ -98,6 +99,7 @@ export default function StudentProfile() {
       .then(([studentData, feeData]) => {
         setStudent(studentData);
         setFeeSummary(feeData.summary);
+        setFeeAssignments(feeData.assignments || []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -338,29 +340,64 @@ export default function StudentProfile() {
                   Financial Status Summary
                 </Typography>
                 <Divider sx={{ mb: 2.5 }} />
-                <Grid container spacing={2.5}>
-                  <Grid item xs={12} sm={4}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6} md={2.4}>
                     <Card
                       sx={{
-                        p: 2.25,
+                        p: 2,
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Base Fee
+                      </Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, color: 'text.primary' }}>
+                        ₹{Number(feeSummary.total_base ?? feeSummary.total_assigned ?? 0).toLocaleString('en-IN')}
+                      </Typography>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={2.4}>
+                    <Card
+                      sx={{
+                        p: 2,
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(245, 158, 11, 0.08)' : 'rgba(245, 158, 11, 0.05)',
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.dark', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Discount Applied
+                      </Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, color: 'warning.dark' }}>
+                        - ₹{Number(feeSummary.total_discount ?? 0).toLocaleString('en-IN')}
+                      </Typography>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} sm={4} md={2.4}>
+                    <Card
+                      sx={{
+                        p: 2,
                         borderRadius: 3,
                         border: '1px solid',
                         borderColor: 'divider',
                         bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(79, 70, 229, 0.08)' : 'rgba(79, 70, 229, 0.04)',
                       }}
                     >
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Total Assigned Fees
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Net Payable Fee
                       </Typography>
-                      <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: 'text.primary' }}>
-                        ₹{feeSummary.total_assigned}
+                      <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, color: 'primary.main' }}>
+                        ₹{Number(feeSummary.total_assigned ?? 0).toLocaleString('en-IN')}
                       </Typography>
                     </Card>
                   </Grid>
-                  <Grid item xs={12} sm={4}>
+                  <Grid item xs={12} sm={4} md={2.4}>
                     <Card
                       sx={{
-                        p: 2.25,
+                        p: 2,
                         borderRadius: 3,
                         border: '1px solid',
                         borderColor: 'divider',
@@ -368,17 +405,17 @@ export default function StudentProfile() {
                       }}
                     >
                       <Typography variant="caption" sx={{ fontWeight: 700, color: 'success.main', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Total Paid Amount
+                        Total Paid
                       </Typography>
-                      <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: 'success.main' }}>
-                        ₹{feeSummary.total_paid}
+                      <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, color: 'success.main' }}>
+                        ₹{Number(feeSummary.total_paid ?? 0).toLocaleString('en-IN')}
                       </Typography>
                     </Card>
                   </Grid>
-                  <Grid item xs={12} sm={4}>
+                  <Grid item xs={12} sm={4} md={2.4}>
                     <Card
                       sx={{
-                        p: 2.25,
+                        p: 2,
                         borderRadius: 3,
                         border: '1px solid',
                         borderColor: 'divider',
@@ -386,14 +423,69 @@ export default function StudentProfile() {
                       }}
                     >
                       <Typography variant="caption" sx={{ fontWeight: 700, color: 'error.main', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Total Outstanding Dues
+                        Outstanding Dues
                       </Typography>
-                      <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: 'error.main' }}>
-                        ₹{feeSummary.total_outstanding}
+                      <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, color: 'error.main' }}>
+                        ₹{Number(feeSummary.total_outstanding ?? 0).toLocaleString('en-IN')}
                       </Typography>
                     </Card>
                   </Grid>
                 </Grid>
+
+                {feeAssignments.length > 0 && (
+                  <Box sx={{ mt: 2.5 }}>
+                    {feeAssignments.map((fa: any) => (
+                      <Paper
+                        key={fa.id}
+                        variant="outlined"
+                        sx={{
+                          p: 1.75,
+                          mb: 1,
+                          borderRadius: 2.5,
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 1.5,
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            {fa.description}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Base Amount: ₹{Number(fa.base_amount || 0).toLocaleString('en-IN')}
+                            {Number(fa.discount_amount || 0) > 0 && (
+                              <> • Discount ({fa.discount_type?.name || 'Applied'}): <strong style={{ color: '#d97706' }}>-₹{Number(fa.discount_amount).toLocaleString('en-IN')}</strong></>
+                            )}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                          {fa.discount_type && (
+                            <Chip
+                              label={fa.discount_type.name}
+                              size="small"
+                              color="secondary"
+                              variant="outlined"
+                              sx={{ fontWeight: 700, fontSize: '0.72rem' }}
+                            />
+                          )}
+                          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                            Net: ₹{Number(fa.net_amount || 0).toLocaleString('en-IN')}
+                          </Typography>
+                          <Chip
+                            label={fa.status}
+                            size="small"
+                            color={fa.status === 'Paid' ? 'success' : fa.status === 'Partial' ? 'warning' : 'error'}
+                            variant="outlined"
+                            sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+                          />
+                        </Box>
+                      </Paper>
+                    ))}
+                  </Box>
+                )}
+
                 <Box sx={{ mt: 2.5, textAlign: 'right' }}>
                   <Button
                     variant="outlined"

@@ -48,6 +48,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 
 const drawerWidth = 260;
 
@@ -87,6 +88,7 @@ const menuSections = [
       { text: 'Academic Years', icon: <SchoolIcon fontSize="small" />, path: '/master/academic-years' },
       { text: 'Grades & Sections', icon: <ClassIcon fontSize="small" />, path: '/master/grades' },
       { text: 'Fee Categories', icon: <CategoryIcon fontSize="small" />, path: '/master/fee-categories' },
+      { text: 'Discount Types', icon: <LocalOfferIcon fontSize="small" />, path: '/master/discount-types' },
     ],
   },
   {

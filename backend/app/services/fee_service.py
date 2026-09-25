@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.repositories.fee_repository import fee_assignment_repository
 from app.repositories.master_repository import discount_type_repo
 from app.domain.fee_models import FeeAssignment, FeeAssignmentStatus
+from app.domain.master_models import DiscountType
 from app.domain.student_models import Student, StudentStatus
 from app.schemas.fee import (
     FeeAssignmentCreate, FeeAssignmentUpdate, StudentFeeSummary,
@@ -11,9 +12,72 @@ from app.schemas.fee import (
 )
 from app.core.exceptions import AppException
 
+DEFAULT_DISCOUNT_PLANS = [
+    {
+        "name": "Teacher Parent",
+        "description": "50% discount on base fee for children of school teachers",
+        "percentage": 50.0,
+        "flat_amount": 0.0,
+        "is_active": True,
+    },
+    {
+        "name": "One Shot Payment",
+        "description": "Flat ₹2,000 discount for full one-shot fee payment",
+        "percentage": 0.0,
+        "flat_amount": 2000.0,
+        "is_active": True,
+    },
+    {
+        "name": "Sibling + One Shot Payment",
+        "description": "Combined Sibling (₹1,000) + One Shot Payment (₹2,000) = ₹3,000 flat discount",
+        "percentage": 0.0,
+        "flat_amount": 3000.0,
+        "is_active": True,
+    },
+    {
+        "name": "Siblings Discount",
+        "description": "Flat ₹1,000 discount for siblings studying in the school",
+        "percentage": 0.0,
+        "flat_amount": 1000.0,
+        "is_active": True,
+    },
+    {
+        "name": "Special Discount",
+        "description": "Custom discount amount as per management / Principal's instruction (e.g. ₹3,000, ₹4,000, ₹5,000)",
+        "percentage": 0.0,
+        "flat_amount": 0.0,
+        "is_active": True,
+    },
+]
+
 class FeeService:
     @staticmethod
-    def calculate_net_amount(db: Session, base_amount: Decimal, discount_type_id: int | None) -> tuple[Decimal, Decimal]:
+    def ensure_default_discounts(db: Session) -> None:
+        """Ensures the 5 standard school discount plans exist in discount_types."""
+        try:
+            existing_list = db.query(DiscountType).all()
+            existing_by_name = {d.name.strip().lower(): d for d in existing_list}
+            changed = False
+
+            for plan in DEFAULT_DISCOUNT_PLANS:
+                key = plan["name"].lower()
+                if key not in existing_by_name:
+                    db.add(DiscountType(**plan))
+                    changed = True
+
+            if changed:
+                db.commit()
+        except Exception:
+            db.rollback()
+
+    @staticmethod
+    def calculate_net_amount(
+        db: Session,
+        base_amount: Decimal,
+        discount_type_id: int | None,
+        custom_discount_amount: Decimal | None = None
+    ) -> tuple[Decimal, Decimal]:
+        base_amount = Decimal(str(base_amount))
         if not discount_type_id:
             return Decimal("0.00"), base_amount
             
@@ -22,19 +86,30 @@ class FeeService:
             raise AppException("Invalid or inactive discount type")
             
         discount_amount = Decimal("0.00")
-        if discount.percentage and discount.percentage > 0:
-            discount_amount = (base_amount * Decimal(discount.percentage)) / Decimal("100")
+        is_special = "special" in (discount.name or "").lower() or (
+            (not discount.percentage or discount.percentage == 0)
+            and (not discount.flat_amount or discount.flat_amount == 0)
+        )
+
+        if is_special and custom_discount_amount is not None and Decimal(str(custom_discount_amount)) > 0:
+            discount_amount = Decimal(str(custom_discount_amount))
+        elif discount.percentage and discount.percentage > 0:
+            discount_amount = (base_amount * Decimal(str(discount.percentage))) / Decimal("100")
         elif discount.flat_amount and discount.flat_amount > 0:
-            discount_amount = Decimal(discount.flat_amount)
+            discount_amount = Decimal(str(discount.flat_amount))
+        elif custom_discount_amount is not None and Decimal(str(custom_discount_amount)) > 0:
+            discount_amount = Decimal(str(custom_discount_amount))
             
-        # Ensure we don't discount more than the base amount
-        discount_amount = min(discount_amount, base_amount)
+        # Ensure we don't discount more than the base amount or less than 0
+        discount_amount = max(Decimal("0.00"), min(discount_amount, base_amount))
         net_amount = base_amount - discount_amount
         return discount_amount, net_amount
 
     @staticmethod
     def create_assignment(db: Session, obj_in: FeeAssignmentCreate) -> FeeAssignment:
-        discount_amt, net_amt = FeeService.calculate_net_amount(db, obj_in.base_amount, obj_in.discount_type_id)
+        discount_amt, net_amt = FeeService.calculate_net_amount(
+            db, obj_in.base_amount, obj_in.discount_type_id, obj_in.discount_amount
+        )
         
         db_obj = FeeAssignment(
             student_id=obj_in.student_id,
@@ -58,11 +133,14 @@ class FeeService:
         update_data = obj_in.model_dump(exclude_unset=True)
         
         # If amount or discount changes, recalculate
-        if "base_amount" in update_data or "discount_type_id" in update_data:
+        if "base_amount" in update_data or "discount_type_id" in update_data or "discount_amount" in update_data:
             base_amt = update_data.get("base_amount", db_obj.base_amount)
             disc_id = update_data.get("discount_type_id", db_obj.discount_type_id)
+            custom_disc_amt = update_data.get("discount_amount", db_obj.discount_amount)
             
-            discount_amt, net_amt = FeeService.calculate_net_amount(db, base_amt, disc_id)
+            discount_amt, net_amt = FeeService.calculate_net_amount(
+                db, base_amt, disc_id, custom_disc_amt
+            )
             
             if net_amt < db_obj.paid_amount:
                 raise AppException(f"New net amount ({net_amt}) cannot be less than already paid amount ({db_obj.paid_amount})")
@@ -89,11 +167,15 @@ class FeeService:
     def get_student_summary(db: Session, student_id: int) -> StudentFeeSummary:
         assignments = fee_assignment_repository.get_by_student(db, student_id=student_id)
         
-        total_assigned = sum(a.net_amount for a in assignments)
-        total_paid = sum(a.paid_amount for a in assignments)
+        total_base = sum((a.base_amount or Decimal("0.00")) for a in assignments)
+        total_discount = sum((a.discount_amount or Decimal("0.00")) for a in assignments)
+        total_assigned = sum((a.net_amount or Decimal("0.00")) for a in assignments)
+        total_paid = sum((a.paid_amount or Decimal("0.00")) for a in assignments)
         
         return StudentFeeSummary(
             student_id=student_id,
+            total_base=total_base,
+            total_discount=total_discount,
             total_assigned=total_assigned,
             total_paid=total_paid,
             total_outstanding=total_assigned - total_paid
@@ -106,6 +188,7 @@ class FeeService:
         grade_id: int,
         fee_category_id: int
     ) -> List[GradeStudentFeeStatus]:
+        FeeService.ensure_default_discounts(db)
         students = db.query(Student).filter(
             Student.grade_id == grade_id,
             Student.status == StudentStatus.ACTIVE
@@ -138,6 +221,8 @@ class FeeService:
                 is_assigned=assignment is not None,
                 assignment_id=assignment.id if assignment else None,
                 base_amount=assignment.base_amount if assignment else None,
+                discount_type_id=assignment.discount_type_id if assignment else None,
+                discount_type_name=assignment.discount_type.name if (assignment and assignment.discount_type) else None,
                 discount_amount=assignment.discount_amount if assignment else None,
                 net_amount=assignment.net_amount if assignment else None,
                 paid_amount=assignment.paid_amount if assignment else None,
@@ -181,24 +266,37 @@ class FeeService:
             existing = existing_map.get(item.student_id)
 
             if existing:
-                # If already assigned:
-                if request.update_existing and existing.paid_amount == 0:
-                    discount_amt, net_amt = FeeService.calculate_net_amount(
-                        db, item.base_amount, item.discount_type_id
-                    )
+                discount_amt, net_amt = FeeService.calculate_net_amount(
+                    db, item.base_amount, item.discount_type_id, item.discount_amount
+                )
+                has_changes = (
+                    Decimal(str(existing.base_amount)) != Decimal(str(item.base_amount))
+                    or existing.discount_type_id != item.discount_type_id
+                    or Decimal(str(existing.discount_amount or 0)) != discount_amt
+                    or Decimal(str(existing.net_amount)) != net_amt
+                )
+                # Update if update_existing is True or if the user modified base/discount on this selected row
+                if (request.update_existing or has_changes) and net_amt >= Decimal(str(existing.paid_amount or 0)):
                     existing.base_amount = item.base_amount
                     existing.discount_type_id = item.discount_type_id
                     existing.discount_amount = discount_amt
                     existing.net_amount = net_amt
                     existing.description = request.description
                     existing.due_date = request.due_date
+                    paid_amt = Decimal(str(existing.paid_amount or 0))
+                    if paid_amt > 0 and net_amt == paid_amt:
+                        existing.status = FeeAssignmentStatus.PAID
+                    elif paid_amt > 0 and net_amt > paid_amt:
+                        existing.status = FeeAssignmentStatus.PARTIAL
+                    else:
+                        existing.status = FeeAssignmentStatus.PENDING
                     updated_count += 1
                     total_assigned_amount += net_amt
                 else:
                     skipped_count += 1
             else:
                 discount_amt, net_amt = FeeService.calculate_net_amount(
-                    db, item.base_amount, item.discount_type_id
+                    db, item.base_amount, item.discount_type_id, item.discount_amount
                 )
                 db_obj = FeeAssignment(
                     student_id=item.student_id,

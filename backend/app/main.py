@@ -44,3 +44,15 @@ app.add_middleware(LicenseEnforcementMiddleware)
 add_exception_handlers(app)
 
 app.include_router(api_router, prefix="/api")
+
+@app.on_event("startup")
+def on_startup_seed_discounts():
+    from app.infrastructure.database import SessionLocal
+    from app.services.fee_service import FeeService
+    db = SessionLocal()
+    try:
+        FeeService.ensure_default_discounts(db)
+    except Exception:
+        pass
+    finally:
+        db.close()

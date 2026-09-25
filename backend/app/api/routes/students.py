@@ -14,6 +14,7 @@ from app.core.exceptions import NotFoundException, AppException
 
 router = APIRouter()
 
+@router.get("", response_model=dict, include_in_schema=False)
 @router.get("/", response_model=dict)
 def get_students(
     page: int = 1,
@@ -37,6 +38,7 @@ def get_students(
     data = [StudentResponse.model_validate(item).model_dump() for item in items]
     return {"data": data, "total": total, "page": page, "size": size}
 
+@router.post("", response_model=StudentResponse, include_in_schema=False)
 @router.post("/", response_model=StudentResponse)
 def create_student(
     student_in: StudentCreate,

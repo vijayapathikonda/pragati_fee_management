@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     GDRIVE_CLIENT_SECRET: Union[str, None] = None  # OAuth 2.0 Client Secret
     GDRIVE_REFRESH_TOKEN: Union[str, None] = None  # OAuth 2.0 User Refresh Token
 
+    # WhatsApp Receipt Notification Configuration
+    WHATSAPP_ENABLED: bool = True
+    SCHOOL_WHATSAPP_NUMBER: str = "919876543210"
+    PUBLIC_BASE_URL: str = "https://pragati-fee-management.onrender.com"
+    # Option 1: Meta WhatsApp Cloud API
+    WHATSAPP_PHONE_NUMBER_ID: Union[str, None] = None
+    WHATSAPP_ACCESS_TOKEN: Union[str, None] = None
+    # Option 2: WhatsApp Gateway / UltraMsg / Wati / Custom Webhook
+    WHATSAPP_GATEWAY_URL: Union[str, None] = None
+    WHATSAPP_GATEWAY_TOKEN: Union[str, None] = None
+
     CORS_ORIGINS: Union[str, List[str]] = ["*"]
 
     model_config = SettingsConfigDict(
@@ -50,9 +61,15 @@ class Settings(BaseSettings):
     def parsed_cors_origins(self) -> List[str]:
         if isinstance(self.CORS_ORIGINS, str):
             try:
-                return json.loads(self.CORS_ORIGINS)
+                origins = json.loads(self.CORS_ORIGINS)
             except json.JSONDecodeError:
-                return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
-        return self.CORS_ORIGINS
+                origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        else:
+            origins = list(self.CORS_ORIGINS)
+        if "*" not in origins:
+            for local_origin in ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8002"]:
+                if local_origin not in origins:
+                    origins.append(local_origin)
+        return origins
 
 settings = Settings()

@@ -11,6 +11,7 @@ class FeeAssignmentBase(BaseModel):
     description: str
     base_amount: Decimal = Field(..., max_digits=10, decimal_places=2)
     discount_type_id: Optional[int] = None
+    discount_amount: Optional[Decimal] = Field(None, ge=0, max_digits=10, decimal_places=2)
     due_date: date
 
 class FeeAssignmentCreate(FeeAssignmentBase):
@@ -31,6 +32,8 @@ class GradeStudentFeeStatus(BaseModel):
     is_assigned: bool = False
     assignment_id: Optional[int] = None
     base_amount: Optional[Decimal] = None
+    discount_type_id: Optional[int] = None
+    discount_type_name: Optional[str] = None
     discount_amount: Optional[Decimal] = None
     net_amount: Optional[Decimal] = None
     paid_amount: Optional[Decimal] = None
@@ -41,6 +44,7 @@ class BatchFeeAssignmentItem(BaseModel):
     student_id: int
     base_amount: Decimal = Field(..., ge=0, max_digits=10, decimal_places=2)
     discount_type_id: Optional[int] = None
+    discount_amount: Optional[Decimal] = Field(None, ge=0, max_digits=10, decimal_places=2)
     is_selected: bool = True
 
 class BatchFeeAssignmentRequest(BaseModel):
@@ -49,7 +53,7 @@ class BatchFeeAssignmentRequest(BaseModel):
     fee_category_id: int
     description: str
     due_date: date
-    update_existing: bool = False
+    update_existing: bool = True
     items: List[BatchFeeAssignmentItem]
 
 class BatchFeeAssignmentResponse(BaseModel):
@@ -63,6 +67,7 @@ class FeeAssignmentUpdate(BaseModel):
     description: Optional[str] = None
     base_amount: Optional[Decimal] = Field(None, max_digits=10, decimal_places=2)
     discount_type_id: Optional[int] = None
+    discount_amount: Optional[Decimal] = Field(None, ge=0, max_digits=10, decimal_places=2)
     due_date: Optional[date] = None
 
 class FeeAssignmentResponse(FeeAssignmentBase):
@@ -81,6 +86,8 @@ class FeeAssignmentResponse(FeeAssignmentBase):
 
 class StudentFeeSummary(BaseModel):
     student_id: int
+    total_base: Decimal = Decimal("0.00")
+    total_discount: Decimal = Decimal("0.00")
     total_assigned: Decimal
     total_paid: Decimal
     total_outstanding: Decimal
@@ -95,6 +102,8 @@ class FeeReceiptCreate(BaseModel):
     student_id: int
     payment_mode_id: int
     transaction_reference: Optional[str] = None
+    send_whatsapp: bool = True
+    mother_phone_override: Optional[str] = None
     items: List[FeePaymentItemCreate]
 
 class FeePaymentItemResponse(BaseModel):
@@ -115,6 +124,16 @@ class FeeReceiptResponse(BaseModel):
     pdf_path: Optional[str] = None
     created_at: datetime
     
+    whatsapp_sent: Optional[bool] = False
+    whatsapp_status: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    recipient_role: Optional[str] = None
+    recipient_name: Optional[str] = None
+    mother_name: Optional[str] = None
+    mother_contact_number: Optional[str] = None
+    whatsapp_message: Optional[str] = None
+    whatsapp_url: Optional[str] = None
+
     items: List[FeePaymentItemResponse] = []
     
     model_config = ConfigDict(from_attributes=True)

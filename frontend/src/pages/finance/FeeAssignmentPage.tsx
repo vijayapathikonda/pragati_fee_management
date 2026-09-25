@@ -19,6 +19,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FlashOnIcon from '@mui/icons-material/FlashOn';
 import SearchIcon from '@mui/icons-material/Search';
 import SchoolIcon from '@mui/icons-material/School';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import api from '../../services/api';
 import {
   getStudentFees, createFeeAssignment, deleteFeeAssignment, updateFeeAssignment,
@@ -38,12 +39,34 @@ interface StudentRosterItem {
   assignment_id: number | null;
   base_amount: number;
   discount_type_id: number | '';
+  custom_discount_amount: number;
+  discount_amount: number;
   net_amount: number;
   paid_amount: number;
   status: string | null;
   due_date: string | null;
   is_selected: boolean;
 }
+
+const isSpecialDiscountType = (disc: any): boolean => {
+  if (!disc) return false;
+  const name = (disc.name || '').toLowerCase();
+  return name.includes('special') || (!Number(disc.percentage) && !Number(disc.flat_amount));
+};
+
+const formatDiscountOptionLabel = (disc: any): string => {
+  if (!disc) return '';
+  if (isSpecialDiscountType(disc)) {
+    return `${disc.name} (Custom ₹)`;
+  }
+  if (Number(disc.percentage) > 0) {
+    return `${disc.name} (${disc.percentage}%)`;
+  }
+  if (Number(disc.flat_amount) > 0) {
+    return `${disc.name} (-₹${Number(disc.flat_amount).toLocaleString('en-IN')})`;
+  }
+  return disc.name;
+};
 
 export default function FeeAssignmentPage() {
   const [activeTab, setActiveTab] = useState<number>(0);
@@ -63,7 +86,7 @@ export default function FeeAssignmentPage() {
   const [commonAmount, setCommonAmount] = useState<string>('45000');
   const [batchDescription, setBatchDescription] = useState<string>('');
   const [batchDueDate, setBatchDueDate] = useState<string>('');
-  const [updateExisting, setUpdateExisting] = useState<boolean>(false);
+  const [updateExisting, setUpdateExisting] = useState<boolean>(true);
   const [searchFilter, setSearchFilter] = useState<string>('');
 
   const [roster, setRoster] = useState<StudentRosterItem[]>([]);
@@ -81,8 +104,33 @@ export default function FeeAssignmentPage() {
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [editingFee, setEditingFee] = useState<any>(null);
 
-  const { register, handleSubmit, reset } = useForm();
-  const { register: registerEdit, handleSubmit: handleEditSubmitWrapper, reset: resetEdit } = useForm();
+  const { register, handleSubmit, reset, watch, setValue } = useForm({
+    defaultValues: {
+      academic_year_id: '' as number | '',
+      fee_category_id: '' as number | '',
+      description: '',
+      base_amount: '45000',
+      due_date: '',
+      discount_type_id: '' as number | '',
+      discount_amount: '',
+    }
+  });
+
+  const {
+    register: registerEdit,
+    handleSubmit: handleEditSubmitWrapper,
+    reset: resetEdit,
+    watch: watchEdit,
+    setValue: setValueEdit
+  } = useForm({
+    defaultValues: {
+      description: '',
+      base_amount: '',
+      due_date: '',
+      discount_type_id: '' as number | '',
+      discount_amount: '',
+    }
+  });
 
   // Load Masters
   useEffect(() => {
@@ -90,7 +138,6 @@ export default function FeeAssignmentPage() {
       const cats = res.data.data || [];
       setCategories(cats);
       if (cats.length > 0) {
-        // Default to Tuition Fee if present
         const tuition = cats.find((c: any) => c.name.toLowerCase().includes('tution') || c.name.toLowerCase().includes('tuition'));
         setBatchCategoryId(tuition ? tuition.id : cats[0].id);
       }
@@ -128,6 +175,31 @@ export default function FeeAssignmentPage() {
     }
   }, [batchCategoryId, batchGradeId, batchYearId, categories, grades, academicYears]);
 
+  // Calculate discount & net helper
+  const computeDiscount = (base: number, discId: number | '', customAmt: number = 0) => {
+    const safeBase = Math.max(0, Number(base) || 0);
+    if (!discId) {
+      return { discountAmount: 0, netAmount: safeBase };
+    }
+    const disc = discountTypes.find(d => Number(d.id) === Number(discId));
+    if (!disc) {
+      return { discountAmount: 0, netAmount: safeBase };
+    }
+    let discAmt = 0;
+    if (isSpecialDiscountType(disc)) {
+      discAmt = Math.max(0, Number(customAmt) || 0);
+    } else if (Number(disc.percentage) > 0) {
+      discAmt = (safeBase * Number(disc.percentage)) / 100;
+    } else if (Number(disc.flat_amount) > 0) {
+      discAmt = Number(disc.flat_amount);
+    }
+    discAmt = Math.min(discAmt, safeBase);
+    return {
+      discountAmount: discAmt,
+      netAmount: Math.max(0, safeBase - discAmt),
+    };
+  };
+
   // Load Roster for Batch Assignment
   const loadBatchRoster = async () => {
     if (!batchYearId || !batchGradeId || !batchCategoryId) return;
@@ -135,9 +207,16 @@ export default function FeeAssignmentPage() {
     try {
       const data = await getGradeFeeStatus(Number(batchYearId), Number(batchGradeId), Number(batchCategoryId));
       const defaultAmtNum = parseFloat(commonAmount) || 0;
+      const allAlreadyAssigned = data.length > 0 && data.every((item: any) => item.is_assigned);
 
       const mapped: StudentRosterItem[] = data.map((item: any) => {
         const baseAmt = item.is_assigned && item.base_amount != null ? Number(item.base_amount) : defaultAmtNum;
+        const discTypeId: number | '' = item.is_assigned && item.discount_type_id ? Number(item.discount_type_id) : '';
+        const existingDiscAmt = item.is_assigned && item.discount_amount != null ? Number(item.discount_amount) : 0;
+        const existingNetAmt = item.is_assigned && item.net_amount != null
+          ? Number(item.net_amount)
+          : Math.max(0, baseAmt - existingDiscAmt);
+
         return {
           student_id: item.student_id,
           admission_number: item.admission_number,
@@ -149,13 +228,14 @@ export default function FeeAssignmentPage() {
           is_assigned: item.is_assigned,
           assignment_id: item.assignment_id,
           base_amount: baseAmt,
-          discount_type_id: '',
-          net_amount: baseAmt,
+          discount_type_id: discTypeId,
+          custom_discount_amount: existingDiscAmt,
+          discount_amount: existingDiscAmt,
+          net_amount: existingNetAmt,
           paid_amount: item.paid_amount ? Number(item.paid_amount) : 0,
           status: item.status,
           due_date: item.due_date,
-          // Uncheck by default if already assigned or paid, check if not assigned
-          is_selected: !item.is_assigned,
+          is_selected: allAlreadyAssigned ? item.status !== 'Paid' : !item.is_assigned,
         };
       });
       setRoster(mapped);
@@ -172,37 +252,60 @@ export default function FeeAssignmentPage() {
     }
   }, [activeTab, batchYearId, batchGradeId, batchCategoryId]);
 
-  // Calculate discount helper
-  const calculateNet = (base: number, discId: number | '') => {
-    if (!discId) return base;
-    const disc = discountTypes.find(d => d.id === discId);
-    if (!disc) return base;
-    let discAmt = 0;
-    if (disc.percentage) {
-      discAmt = (base * Number(disc.percentage)) / 100;
-    } else if (disc.flat_amount) {
-      discAmt = Number(disc.flat_amount);
-    }
-    discAmt = Math.min(discAmt, base);
-    return Math.max(0, base - discAmt);
-  };
-
-  // Student Amount Change Handler
+  // Student Base Amount Change Handler
   const handleAmountChange = (studentId: number, val: string) => {
     const num = parseFloat(val) || 0;
     setRoster(prev => prev.map(s => {
       if (s.student_id === studentId) {
-        return { ...s, base_amount: num, net_amount: calculateNet(num, s.discount_type_id) };
+        const { discountAmount, netAmount } = computeDiscount(num, s.discount_type_id, s.custom_discount_amount);
+        return {
+          ...s,
+          is_selected: true,
+          base_amount: num,
+          discount_amount: discountAmount,
+          net_amount: netAmount
+        };
       }
       return s;
     }));
   };
 
-  // Student Discount Change Handler
+  // Student Discount Type Change Handler
   const handleDiscountChange = (studentId: number, discId: number | '') => {
+    const normalizedId: number | '' = discId === '' || discId === null || discId === undefined ? '' : Number(discId);
     setRoster(prev => prev.map(s => {
       if (s.student_id === studentId) {
-        return { ...s, discount_type_id: discId, net_amount: calculateNet(s.base_amount, discId) };
+        const disc = discountTypes.find(d => Number(d.id) === normalizedId);
+        const isSpec = isSpecialDiscountType(disc);
+        // Default Special Discount to 3000 if not yet entered, otherwise 0
+        const nextCustomAmt = isSpec ? (s.custom_discount_amount > 0 ? s.custom_discount_amount : 3000) : 0;
+        const { discountAmount, netAmount } = computeDiscount(s.base_amount, normalizedId, nextCustomAmt);
+        return {
+          ...s,
+          is_selected: true,
+          discount_type_id: normalizedId,
+          custom_discount_amount: nextCustomAmt,
+          discount_amount: discountAmount,
+          net_amount: netAmount
+        };
+      }
+      return s;
+    }));
+  };
+
+  // Student Custom Special Discount Amount Change Handler
+  const handleCustomDiscountAmountChange = (studentId: number, val: string) => {
+    const customNum = Math.max(0, parseFloat(val) || 0);
+    setRoster(prev => prev.map(s => {
+      if (s.student_id === studentId) {
+        const { discountAmount, netAmount } = computeDiscount(s.base_amount, s.discount_type_id, customNum);
+        return {
+          ...s,
+          is_selected: true,
+          custom_discount_amount: customNum,
+          discount_amount: discountAmount,
+          net_amount: netAmount
+        };
       }
       return s;
     }));
@@ -223,7 +326,8 @@ export default function FeeAssignmentPage() {
     const num = parseFloat(commonAmount) || 0;
     setRoster(prev => prev.map(s => {
       if (s.is_selected) {
-        return { ...s, base_amount: num, net_amount: calculateNet(num, s.discount_type_id) };
+        const { discountAmount, netAmount } = computeDiscount(num, s.discount_type_id, s.custom_discount_amount);
+        return { ...s, base_amount: num, discount_amount: discountAmount, net_amount: netAmount };
       }
       return s;
     }));
@@ -272,6 +376,7 @@ export default function FeeAssignmentPage() {
           student_id: s.student_id,
           base_amount: s.base_amount,
           discount_type_id: s.discount_type_id || null,
+          discount_amount: s.discount_amount || 0,
           is_selected: s.is_selected,
         })),
       };
@@ -279,7 +384,6 @@ export default function FeeAssignmentPage() {
       const res = await batchAssignFees(payload);
       setBatchResult(res);
       setConfirmDialogOpen(false);
-      // Reload roster to reflect new assignments
       loadBatchRoster();
     } catch (err: any) {
       console.error('Batch assignment failed:', err);
@@ -306,24 +410,71 @@ export default function FeeAssignmentPage() {
     }
   };
 
+  // Watched fields for Individual Assign Modal
+  const watchedBase = watch('base_amount');
+  const watchedDiscId = watch('discount_type_id');
+  const watchedCustomDisc = watch('discount_amount');
+  const selectedAssignDiscountObj = discountTypes.find(d => d.id === Number(watchedDiscId));
+  const isAssignSpecial = isSpecialDiscountType(selectedAssignDiscountObj);
+  const assignCalc = computeDiscount(
+    parseFloat(String(watchedBase)) || 0,
+    watchedDiscId ? Number(watchedDiscId) : '',
+    parseFloat(String(watchedCustomDisc)) || 0
+  );
+
+  // Watched fields for Individual Edit Modal
+  const watchedEditBase = watchEdit('base_amount');
+  const watchedEditDiscId = watchEdit('discount_type_id');
+  const watchedEditCustomDisc = watchEdit('discount_amount');
+  const selectedEditDiscountObj = discountTypes.find(d => d.id === Number(watchedEditDiscId));
+  const isEditSpecial = isSpecialDiscountType(selectedEditDiscountObj);
+  const editCalc = computeDiscount(
+    parseFloat(String(watchedEditBase)) || 0,
+    watchedEditDiscId ? Number(watchedEditDiscId) : '',
+    parseFloat(String(watchedEditCustomDisc)) || 0
+  );
+
+  const handleOpenCreateDialog = () => {
+    const activeAy = academicYears.find((a: any) => a.is_active) || academicYears[academicYears.length - 1];
+    const defaultCat = categories.find((c: any) => c.name.toLowerCase().includes('tution') || c.name.toLowerCase().includes('tuition')) || categories[0];
+    reset({
+      academic_year_id: activeAy ? activeAy.id : '',
+      fee_category_id: defaultCat ? defaultCat.id : '',
+      description: defaultCat ? `${defaultCat.name} (${activeAy?.name || ''})`.trim() : 'Annual Tuition Fee',
+      base_amount: '45000',
+      due_date: batchDueDate,
+      discount_type_id: '',
+      discount_amount: '',
+    });
+    setOpenDialog(true);
+  };
+
   const handleAssignSubmit = async (data: any) => {
     try {
+      const discObj = discountTypes.find(d => d.id === Number(data.discount_type_id));
+      const isSpec = isSpecialDiscountType(discObj);
+      const calc = computeDiscount(
+        parseFloat(data.base_amount) || 0,
+        data.discount_type_id ? Number(data.discount_type_id) : '',
+        parseFloat(data.discount_amount) || 0
+      );
       const payload = {
         student_id: selectedStudentId,
-        academic_year_id: data.academic_year_id,
-        fee_category_id: data.fee_category_id,
+        academic_year_id: Number(data.academic_year_id),
+        fee_category_id: Number(data.fee_category_id),
         description: data.description,
-        base_amount: data.base_amount,
-        discount_type_id: data.discount_type_id || null,
+        base_amount: parseFloat(data.base_amount) || 0,
+        discount_type_id: data.discount_type_id ? Number(data.discount_type_id) : null,
+        discount_amount: isSpec ? (parseFloat(data.discount_amount) || 0) : calc.discountAmount,
         due_date: data.due_date,
       };
       await createFeeAssignment(payload);
       setOpenDialog(false);
       reset();
       loadFeeData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to assign fee', error);
-      alert('Failed to assign fee');
+      alert(error.response?.data?.detail || 'Failed to assign fee');
     }
   };
 
@@ -344,6 +495,7 @@ export default function FeeAssignmentPage() {
       description: fee.description,
       base_amount: fee.base_amount,
       discount_type_id: fee.discount_type_id || '',
+      discount_amount: fee.discount_amount || '',
       due_date: fee.due_date,
     });
     setOpenEditDialog(true);
@@ -351,32 +503,95 @@ export default function FeeAssignmentPage() {
 
   const handleEditSubmit = async (data: any) => {
     try {
+      const discObj = discountTypes.find(d => d.id === Number(data.discount_type_id));
+      const isSpec = isSpecialDiscountType(discObj);
+      const calc = computeDiscount(
+        parseFloat(data.base_amount) || 0,
+        data.discount_type_id ? Number(data.discount_type_id) : '',
+        parseFloat(data.discount_amount) || 0
+      );
       const payload = {
         description: data.description,
-        base_amount: data.base_amount,
-        discount_type_id: data.discount_type_id || null,
+        base_amount: parseFloat(data.base_amount) || 0,
+        discount_type_id: data.discount_type_id ? Number(data.discount_type_id) : null,
+        discount_amount: isSpec ? (parseFloat(data.discount_amount) || 0) : calc.discountAmount,
         due_date: data.due_date,
       };
       await updateFeeAssignment(editingFee.id, payload);
       setOpenEditDialog(false);
       loadFeeData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update fee', error);
-      alert('Failed to update fee');
+      alert(error.response?.data?.detail || 'Failed to update fee');
     }
   };
 
   const individualColumns: GridColDef[] = [
-    { field: 'description', headerName: 'Fee Description', width: 220 },
-    { field: 'base_amount', headerName: 'Base Amount', width: 130, renderCell: (p) => `₹${Number(p.value).toLocaleString('en-IN')}` },
-    { field: 'discount_amount', headerName: 'Discount', width: 120, renderCell: (p) => `₹${Number(p.value || 0).toLocaleString('en-IN')}` },
-    { field: 'net_amount', headerName: 'Net Amount', width: 130, renderCell: (p) => <strong style={{ color: '#4f46e5' }}>₹{Number(p.value).toLocaleString('en-IN')}</strong> },
-    { field: 'paid_amount', headerName: 'Paid Amount', width: 130, renderCell: (p) => <span style={{ color: '#059669', fontWeight: 600 }}>₹{Number(p.value).toLocaleString('en-IN')}</span> },
-    { field: 'due_date', headerName: 'Due Date', width: 120 },
+    { field: 'description', headerName: 'Fee Description', flex: 1, minWidth: 190 },
+    {
+      field: 'base_amount',
+      headerName: 'Base Amount',
+      width: 125,
+      renderCell: (p) => <span style={{ fontWeight: 600 }}>₹{Number(p.value).toLocaleString('en-IN')}</span>
+    },
+    {
+      field: 'discount_type',
+      headerName: 'Discount Type',
+      width: 190,
+      renderCell: (p) => {
+        const dt = p.row.discount_type;
+        if (!dt) return <span style={{ color: '#94a3b8' }}>None</span>;
+        return (
+          <Chip
+            icon={<LocalOfferIcon style={{ fontSize: '0.85rem' }} />}
+            label={dt.name}
+            size="small"
+            color="secondary"
+            variant="outlined"
+            sx={{ fontWeight: 600, fontSize: '0.73rem' }}
+          />
+        );
+      }
+    },
+    {
+      field: 'discount_amount',
+      headerName: 'Percentage / Discount',
+      width: 165,
+      renderCell: (p) => {
+        const dt = p.row.discount_type;
+        const amt = Number(p.value || 0);
+        if (amt <= 0) return <span style={{ color: '#94a3b8' }}>₹0</span>;
+        if (dt && Number(dt.percentage) > 0) {
+          return (
+            <span style={{ color: '#d97706', fontWeight: 700 }}>
+              {dt.percentage}% (-₹{amt.toLocaleString('en-IN')})
+            </span>
+          );
+        }
+        return (
+          <span style={{ color: '#d97706', fontWeight: 700 }}>
+            -₹{amt.toLocaleString('en-IN')}
+          </span>
+        );
+      }
+    },
+    {
+      field: 'net_amount',
+      headerName: 'Net Amount',
+      width: 130,
+      renderCell: (p) => <strong style={{ color: '#4f46e5', fontSize: '0.92rem' }}>₹{Number(p.value).toLocaleString('en-IN')}</strong>
+    },
+    {
+      field: 'paid_amount',
+      headerName: 'Paid Amount',
+      width: 125,
+      renderCell: (p) => <span style={{ color: '#059669', fontWeight: 600 }}>₹{Number(p.value).toLocaleString('en-IN')}</span>
+    },
+    { field: 'due_date', headerName: 'Due Date', width: 115 },
     {
       field: 'status',
       headerName: 'Status',
-      width: 120,
+      width: 110,
       renderCell: (params) => {
         const isPaid = params.value === 'Paid';
         const isPartial = params.value === 'Partial';
@@ -397,7 +612,7 @@ export default function FeeAssignmentPage() {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
+      width: 105,
       sortable: false,
       renderCell: (params) => (
         <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -422,16 +637,44 @@ export default function FeeAssignmentPage() {
   const currentGradeName = grades.find(g => g.id === batchGradeId)?.name || 'Grade';
 
   return (
-    <Box sx={{ width: '100%', maxWidth: 1300, mx: 'auto', pb: 8 }}>
+    <Box sx={{ width: '100%', maxWidth: 1350, mx: 'auto', pb: 8 }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 2.5 }}>
         <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: 'text.primary' }}>
           Fee Structure & Assignments
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Assign tuition, transportation, and special curriculum fees in bulk by grade or configure individual student balances.
+          Assign tuition, transportation, and special curriculum fees with automatic discount calculation.
         </Typography>
       </Box>
+
+      {/* Official School Discount Plans Reference Strip */}
+      <Paper
+        sx={{
+          p: 2,
+          mb: 3,
+          borderRadius: 3,
+          border: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'rgba(79, 70, 229, 0.03)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 1.5,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mr: 1 }}>
+          <LocalOfferIcon color="primary" fontSize="small" />
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+            Discount Plans:
+          </Typography>
+        </Box>
+        <Chip label="Teacher Parent: 50% OFF" size="small" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
+        <Chip label="One Shot Payment: -₹2,000" size="small" color="success" variant="outlined" sx={{ fontWeight: 700 }} />
+        <Chip label="Sibling + One Shot: -₹3,000" size="small" color="secondary" variant="outlined" sx={{ fontWeight: 700 }} />
+        <Chip label="Siblings Discount: -₹1,000" size="small" color="info" variant="outlined" sx={{ fontWeight: 700 }} />
+        <Chip label="Special Discount: Custom ₹ (e.g. ₹3,000 / ₹4,000 / ₹5,000)" size="small" color="warning" variant="outlined" sx={{ fontWeight: 700 }} />
+      </Paper>
 
       {/* Tabs */}
       <Paper sx={{ mb: 3, borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
@@ -547,14 +790,14 @@ export default function FeeAssignmentPage() {
                 <TextField
                   fullWidth
                   size="small"
-                  label="Common Default Amount"
+                  label="Common Default Base Amount"
                   type="number"
                   value={commonAmount}
                   onChange={(e) => setCommonAmount(e.target.value)}
                   InputProps={{
                     startAdornment: <InputAdornment position="start">₹</InputAdornment>,
                   }}
-                  helperText="Default fee assigned to students in this grade"
+                  helperText="Default base fee before discount"
                 />
               </Grid>
 
@@ -587,7 +830,7 @@ export default function FeeAssignmentPage() {
             <Box sx={{ mt: 2.5, pt: 2, borderTop: '1px dashed', borderColor: 'divider', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
-                  Quick Amount Presets:
+                  Quick Base Amount Presets:
                 </Typography>
                 {[
                   { label: 'Tuition (₹45k)', amt: '45000' },
@@ -729,7 +972,7 @@ export default function FeeAssignmentPage() {
                 </Typography>
               </Box>
             ) : (
-              <TableContainer sx={{ maxHeight: 600 }}>
+              <TableContainer sx={{ maxHeight: 620 }}>
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'grey.50' } }}>
@@ -740,11 +983,12 @@ export default function FeeAssignmentPage() {
                           onChange={(e) => handleSelectAll(e.target.checked)}
                         />
                       </TableCell>
-                      <TableCell width={60}>Roll #</TableCell>
+                      <TableCell width={55}>Roll #</TableCell>
                       <TableCell>Student Details</TableCell>
-                      <TableCell width={160}>Current Status</TableCell>
-                      <TableCell width={180}>Base Amount (₹)</TableCell>
-                      <TableCell width={180}>Discount Concession</TableCell>
+                      <TableCell width={145}>Current Status</TableCell>
+                      <TableCell width={150}>Base Amount (₹)</TableCell>
+                      <TableCell width={220}>Discount Type</TableCell>
+                      <TableCell width={190}>Percentage / Special (₹)</TableCell>
                       <TableCell width={140} align="right">Net Amount</TableCell>
                     </TableRow>
                   </TableHead>
@@ -753,6 +997,8 @@ export default function FeeAssignmentPage() {
                       const isPaid = s.status === 'Paid';
                       const isPartial = s.status === 'Partial';
                       const isAssigned = s.is_assigned;
+                      const selectedDisc = discountTypes.find(d => d.id === Number(s.discount_type_id));
+                      const isSpecial = isSpecialDiscountType(selectedDisc);
 
                       return (
                         <TableRow
@@ -801,47 +1047,130 @@ export default function FeeAssignmentPage() {
                             ) : isPartial ? (
                               <Chip label={`Partial (₹${s.paid_amount.toLocaleString('en-IN')})`} size="small" color="warning" sx={{ fontWeight: 700, fontSize: '0.7rem' }} />
                             ) : isAssigned ? (
-                              <Chip label={`Assigned: ₹${s.base_amount.toLocaleString('en-IN')}`} size="small" color="info" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.7rem' }} />
+                              <Box>
+                                <Chip label={`Net: ₹${s.net_amount.toLocaleString('en-IN')}`} size="small" color="info" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.7rem' }} />
+                                {s.discount_amount > 0 && (
+                                  <Typography variant="caption" sx={{ display: 'block', color: 'success.main', fontWeight: 700, mt: 0.25 }}>
+                                    Disc: -₹{s.discount_amount.toLocaleString('en-IN')}
+                                  </Typography>
+                                )}
+                              </Box>
                             ) : (
                               <Chip label="Not Assigned" size="small" variant="outlined" sx={{ color: 'text.secondary', fontSize: '0.7rem' }} />
                             )}
                           </TableCell>
 
+                          {/* Base Amount Column */}
                           <TableCell>
                             <TextField
                               size="small"
                               type="number"
                               value={s.base_amount}
                               onChange={(e) => handleAmountChange(s.student_id, e.target.value)}
-                              disabled={isPaid || !s.is_selected}
+                              disabled={isPaid}
                               InputProps={{
                                 startAdornment: <InputAdornment position="start">₹</InputAdornment>,
                               }}
-                              sx={{ width: 140, '& input': { py: 0.75, fontWeight: 600 } }}
+                              sx={{ width: 135, '& input': { py: 0.75, fontWeight: 600 } }}
                             />
                           </TableCell>
 
+                          {/* Discount Type Dropdown */}
                           <TableCell>
-                            <FormControl size="small" fullWidth sx={{ minWidth: 150 }}>
+                            <FormControl size="small" fullWidth sx={{ minWidth: 195 }}>
                               <Select
                                 value={s.discount_type_id}
                                 onChange={(e) => handleDiscountChange(s.student_id, e.target.value as any)}
-                                disabled={isPaid || !s.is_selected}
+                                disabled={isPaid}
                                 displayEmpty
-                                sx={{ py: 0 }}
+                                sx={{ py: 0, fontSize: '0.84rem' }}
                               >
-                                <MenuItem value=""><em>None</em></MenuItem>
+                                <MenuItem value=""><em>No Discount</em></MenuItem>
                                 {discountTypes.map((d: any) => (
                                   <MenuItem key={d.id} value={d.id}>
-                                    {d.name} ({d.percentage ? `${d.percentage}%` : `₹${d.flat_amount}`})
+                                    {formatDiscountOptionLabel(d)}
                                   </MenuItem>
                                 ))}
                               </Select>
                             </FormControl>
                           </TableCell>
 
-                          <TableCell align="right" sx={{ fontWeight: 700, color: s.is_selected ? '#4f46e5' : 'text.disabled' }}>
-                            ₹{s.net_amount.toLocaleString('en-IN')}
+                          {/* Percentage / Special Discount Amount Column */}
+                          <TableCell>
+                            {!selectedDisc ? (
+                              <Typography variant="body2" color="text.disabled">
+                                —
+                              </Typography>
+                            ) : isSpecial ? (
+                              <Box>
+                                <TextField
+                                  size="small"
+                                  type="number"
+                                  placeholder="e.g. 3000"
+                                  value={s.custom_discount_amount || ''}
+                                  onChange={(e) => handleCustomDiscountAmountChange(s.student_id, e.target.value)}
+                                  disabled={isPaid}
+                                  InputProps={{
+                                    startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                                  }}
+                                  sx={{ width: 135, '& input': { py: 0.6, fontWeight: 700, color: '#d97706' } }}
+                                />
+                                <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+                                  {[3000, 4000, 5000].map(amt => (
+                                    <Chip
+                                      key={amt}
+                                      label={`₹${amt / 1000}k`}
+                                      size="small"
+                                      clickable
+                                      disabled={isPaid}
+                                      onClick={() => handleCustomDiscountAmountChange(s.student_id, String(amt))}
+                                      color={s.custom_discount_amount === amt ? 'warning' : 'default'}
+                                      variant={s.custom_discount_amount === amt ? 'filled' : 'outlined'}
+                                      sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                                    />
+                                  ))}
+                                </Box>
+                              </Box>
+                            ) : Number(selectedDisc.percentage) > 0 ? (
+                              <Box>
+                                <Chip
+                                  label={`${selectedDisc.percentage}% OFF`}
+                                  size="small"
+                                  color="primary"
+                                  sx={{ height: 22, fontWeight: 700, fontSize: '0.72rem' }}
+                                />
+                                <Typography variant="caption" sx={{ display: 'block', color: 'success.main', fontWeight: 700, mt: 0.25 }}>
+                                  -₹{s.discount_amount.toLocaleString('en-IN')}
+                                </Typography>
+                              </Box>
+                            ) : (
+                              <Chip
+                                label={`-₹${s.discount_amount.toLocaleString('en-IN')}`}
+                                size="small"
+                                color="success"
+                                variant="outlined"
+                                sx={{ fontWeight: 700, fontSize: '0.75rem' }}
+                              />
+                            )}
+                          </TableCell>
+
+                          {/* Net Amount Column */}
+                          <TableCell align="right">
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 800,
+                                fontSize: '0.95rem',
+                                color: '#4f46e5'
+                              }}
+                            >
+                              ₹{s.net_amount.toLocaleString('en-IN')}
+                            </Typography>
+                            {s.discount_amount > 0 && (
+                              <Typography variant="caption" sx={{ display: 'block', color: 'success.main', fontWeight: 600 }}>
+                                Saved ₹{s.discount_amount.toLocaleString('en-IN')}
+                              </Typography>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -879,7 +1208,7 @@ export default function FeeAssignmentPage() {
                 }
                 label={
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    Update amounts for already assigned students who have not paid yet
+                    Update amounts & discounts for already assigned students who have not paid yet
                   </Typography>
                 }
               />
@@ -888,7 +1217,7 @@ export default function FeeAssignmentPage() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ textAlign: 'right' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>
-                  READY TO ASSIGN:
+                  READY TO ASSIGN (NET TOTAL):
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: '#4f46e5' }}>
                   {selectedCount} Students • ₹{totalBatchAmount.toLocaleString('en-IN')}
@@ -943,7 +1272,7 @@ export default function FeeAssignmentPage() {
                   <Grid item xs={6}><Typography variant="body2" color="text.secondary">Selected Students:</Typography></Grid>
                   <Grid item xs={6}><Typography variant="body2" fontWeight={700}>{selectedCount} Students</Typography></Grid>
 
-                  <Grid item xs={6}><Typography variant="body2" color="text.secondary">Total Batch Billing:</Typography></Grid>
+                  <Grid item xs={6}><Typography variant="body2" color="text.secondary">Total Net Billing:</Typography></Grid>
                   <Grid item xs={6}><Typography variant="body2" fontWeight={800} color="primary.main">₹{totalBatchAmount.toLocaleString('en-IN')}</Typography></Grid>
 
                   <Grid item xs={6}><Typography variant="body2" color="text.secondary">Due Date:</Typography></Grid>
@@ -959,7 +1288,7 @@ export default function FeeAssignmentPage() {
 
               {updateExisting && (
                 <Alert severity="warning" sx={{ mt: 1 }}>
-                  Overwrite enabled: Students with existing unpaid assignments will have their base amounts updated to the entered values.
+                  Overwrite enabled: Students with existing unpaid assignments will have their base amounts, discounts, and net amounts updated.
                 </Alert>
               )}
             </DialogContent>
@@ -992,7 +1321,7 @@ export default function FeeAssignmentPage() {
                 <Typography variant="body2"><strong>Existing Assignments Updated:</strong> {batchResult?.updated_count}</Typography>
                 <Typography variant="body2"><strong>Students Skipped:</strong> {batchResult?.skipped_count}</Typography>
                 <Typography variant="body2" sx={{ mt: 1, fontWeight: 700, color: 'success.dark' }}>
-                  Total Fee Recorded: ₹{Number(batchResult?.total_assigned_amount || 0).toLocaleString('en-IN')}
+                  Total Net Fee Recorded: ₹{Number(batchResult?.total_assigned_amount || 0).toLocaleString('en-IN')}
                 </Typography>
               </Box>
             </DialogContent>
@@ -1024,7 +1353,7 @@ export default function FeeAssignmentPage() {
                   <Button
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={() => setOpenDialog(true)}
+                    onClick={handleOpenCreateDialog}
                     sx={{ borderRadius: 2, px: 2.5 }}
                   >
                     Assign Fee
@@ -1041,7 +1370,7 @@ export default function FeeAssignmentPage() {
                 <Grid item xs={12} md={4}>
                   <Card sx={{ p: 2.5, borderRadius: 3.5, border: '1px solid', borderColor: 'divider' }}>
                     <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Total Assigned Fee
+                      Total Net Assigned Fee
                     </Typography>
                     <Typography variant="h4" sx={{ fontWeight: 800, mt: 0.5, color: 'primary.main' }}>
                       ₹{Number(feeData.summary.total_assigned).toLocaleString('en-IN')}
@@ -1089,60 +1418,184 @@ export default function FeeAssignmentPage() {
             </Box>
           )}
 
-          {/* Assign Fee Dialog */}
+          {/* Assign New Fee Dialog */}
           <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-            <DialogTitle>Assign New Fee</DialogTitle>
+            <DialogTitle sx={{ fontWeight: 800 }}>Assign New Fee</DialogTitle>
             <DialogContent dividers>
               <form id="assign-fee-form" onSubmit={handleSubmit(handleAssignSubmit)}>
                 <Grid container spacing={2} sx={{ pt: 1 }}>
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth required>
-                      <InputLabel>Academic Year</InputLabel>
-                      <Select label="Academic Year" defaultValue="" {...register('academic_year_id', { required: true })}>
+                      <InputLabel shrink>Academic Year</InputLabel>
+                      <Select
+                        label="Academic Year"
+                        value={watch('academic_year_id')}
+                        onChange={(e) => setValue('academic_year_id', e.target.value as any)}
+                      >
                         {academicYears.map((ay: any) => <MenuItem key={ay.id} value={ay.id}>{ay.name}</MenuItem>)}
                       </Select>
                     </FormControl>
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth required>
-                      <InputLabel>Fee Category</InputLabel>
-                      <Select label="Fee Category" defaultValue="" {...register('fee_category_id', { required: true })}>
+                      <InputLabel shrink>Fee Category</InputLabel>
+                      <Select
+                        label="Fee Category"
+                        value={watch('fee_category_id')}
+                        onChange={(e) => setValue('fee_category_id', e.target.value as any)}
+                      >
                         {categories.map((c: any) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                       </Select>
                     </FormControl>
                   </Grid>
                   <Grid item xs={12}>
-                    <TextField fullWidth label="Description (e.g. Term 1 Installment)" {...register('description', { required: true })} required />
+                    <TextField
+                      fullWidth
+                      label="Description (e.g. Annual Tuition Fee)"
+                      InputLabelProps={{ shrink: true }}
+                      {...register('description', { required: true })}
+                      required
+                    />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField fullWidth label="Base Amount" type="number" inputProps={{ step: "0.01" }} {...register('base_amount', { required: true })} required />
+                    <TextField
+                      fullWidth
+                      label="Base Amount (₹)"
+                      type="number"
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ step: "0.01", min: "0" }}
+                      {...register('base_amount', { required: true })}
+                      required
+                    />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField fullWidth label="Due Date" type="date" InputLabelProps={{ shrink: true }} {...register('due_date', { required: true })} required />
+                    <TextField
+                      fullWidth
+                      label="Due Date"
+                      type="date"
+                      InputLabelProps={{ shrink: true }}
+                      {...register('due_date', { required: true })}
+                      required
+                    />
                   </Grid>
+
                   <Grid item xs={12}>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>Optional Discount</Typography>
+                    <Divider sx={{ my: 0.5 }} />
+                    <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 700, mb: 1, mt: 1 }}>
+                      Discount Plan & Concession
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} sm={isAssignSpecial ? 6 : 12}>
                     <FormControl fullWidth>
-                      <InputLabel>Discount Type</InputLabel>
-                      <Select label="Discount Type" defaultValue="" {...register('discount_type_id')}>
-                        <MenuItem value=""><em>None</em></MenuItem>
-                        {discountTypes.map((d: any) => <MenuItem key={d.id} value={d.id}>{d.name} ({d.percentage ? d.percentage + '%' : '₹' + d.flat_amount})</MenuItem>)}
+                      <InputLabel shrink>Discount Type</InputLabel>
+                      <Select
+                        label="Discount Type"
+                        displayEmpty
+                        value={watchedDiscId}
+                        onChange={(e) => {
+                          const val = e.target.value as any;
+                          setValue('discount_type_id', val);
+                          const d = discountTypes.find(x => x.id === Number(val));
+                          if (isSpecialDiscountType(d) && !watchedCustomDisc) {
+                            setValue('discount_amount', '3000');
+                          }
+                        }}
+                      >
+                        <MenuItem value=""><em>No Discount</em></MenuItem>
+                        {discountTypes.map((d: any) => (
+                          <MenuItem key={d.id} value={d.id}>
+                            {formatDiscountOptionLabel(d)}
+                          </MenuItem>
+                        ))}
                       </Select>
                     </FormControl>
+                  </Grid>
+
+                  {isAssignSpecial && (
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Special Discount Amount (₹)"
+                        type="number"
+                        placeholder="e.g. 3000, 4000, 5000"
+                        InputLabelProps={{ shrink: true }}
+                        inputProps={{ step: "1", min: "0" }}
+                        {...register('discount_amount')}
+                      />
+                      <Box sx={{ display: 'flex', gap: 0.75, mt: 1 }}>
+                        {[3000, 4000, 5000].map(amt => (
+                          <Chip
+                            key={amt}
+                            label={`₹${amt.toLocaleString('en-IN')}`}
+                            size="small"
+                            clickable
+                            onClick={() => setValue('discount_amount', String(amt))}
+                            color={Number(watchedCustomDisc) === amt ? 'warning' : 'default'}
+                            variant={Number(watchedCustomDisc) === amt ? 'filled' : 'outlined'}
+                            sx={{ fontWeight: 700, fontSize: '0.72rem' }}
+                          />
+                        ))}
+                      </Box>
+                    </Grid>
+                  )}
+
+                  {/* Live Calculation Preview Card */}
+                  <Grid item xs={12}>
+                    <Box
+                      sx={{
+                        mt: 1,
+                        p: 2,
+                        borderRadius: 2.5,
+                        bgcolor: 'rgba(79, 70, 229, 0.05)',
+                        border: '1px solid rgba(79, 70, 229, 0.2)',
+                      }}
+                    >
+                      <Grid container spacing={1} alignItems="center">
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                            BASE AMOUNT
+                          </Typography>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                            ₹{(parseFloat(String(watchedBase)) || 0).toLocaleString('en-IN')}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                            DISCOUNT DEDUCTED
+                          </Typography>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'success.main' }}>
+                            - ₹{assignCalc.discountAmount.toLocaleString('en-IN')}
+                            {selectedAssignDiscountObj && Number(selectedAssignDiscountObj.percentage) > 0
+                              ? ` (${selectedAssignDiscountObj.percentage}%)`
+                              : ''}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4} sx={{ textAlign: 'right' }}>
+                          <Typography variant="caption" color="primary" sx={{ fontWeight: 700 }}>
+                            NET AMOUNT PAYABLE
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: '#4f46e5' }}>
+                            ₹{assignCalc.netAmount.toLocaleString('en-IN')}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Box>
                   </Grid>
                 </Grid>
               </form>
             </DialogContent>
-            <DialogActions>
+            <DialogActions sx={{ p: 2 }}>
               <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-              <Button type="submit" form="assign-fee-form" variant="contained">Assign</Button>
+              <Button type="submit" form="assign-fee-form" variant="contained">
+                Assign Fee (₹{assignCalc.netAmount.toLocaleString('en-IN')})
+              </Button>
             </DialogActions>
           </Dialog>
 
           {/* Edit Fee Dialog */}
           <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} maxWidth="sm" fullWidth>
-            <DialogTitle>Edit Fee Assignment</DialogTitle>
+            <DialogTitle sx={{ fontWeight: 800 }}>Edit Fee Assignment</DialogTitle>
             <DialogContent dividers>
               {openEditDialog && (
               <form id="edit-fee-form" onSubmit={handleEditSubmitWrapper(handleEditSubmit)}>
@@ -1151,29 +1604,124 @@ export default function FeeAssignmentPage() {
                     <TextField fullWidth label="Description" InputLabelProps={{ shrink: true }} {...registerEdit('description', { required: true })} required />
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <TextField fullWidth label="Base Amount" type="number" InputLabelProps={{ shrink: true }} inputProps={{ step: "0.01" }} {...registerEdit('base_amount', { required: true })} required />
+                    <TextField fullWidth label="Base Amount (₹)" type="number" InputLabelProps={{ shrink: true }} inputProps={{ step: "0.01" }} {...registerEdit('base_amount', { required: true })} required />
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <TextField fullWidth label="Due Date" type="date" InputLabelProps={{ shrink: true }} {...registerEdit('due_date', { required: true })} required />
                   </Grid>
+
                   <Grid item xs={12}>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>Optional Discount</Typography>
+                    <Divider sx={{ my: 0.5 }} />
+                    <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 700, mb: 1, mt: 1 }}>
+                      Discount Plan & Concession
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} sm={isEditSpecial ? 6 : 12}>
                     <FormControl fullWidth>
                       <InputLabel shrink>Discount Type</InputLabel>
-                      <Select label="Discount Type" defaultValue={editingFee?.discount_type_id || ''} {...registerEdit('discount_type_id')}>
-                        <MenuItem value=""><em>None</em></MenuItem>
-                        {discountTypes.map((d: any) => <MenuItem key={d.id} value={d.id}>{d.name} ({d.percentage ? d.percentage + '%' : '₹' + d.flat_amount})</MenuItem>)}
+                      <Select
+                        label="Discount Type"
+                        displayEmpty
+                        value={watchedEditDiscId}
+                        onChange={(e) => {
+                          const val = e.target.value as any;
+                          setValueEdit('discount_type_id', val);
+                          const d = discountTypes.find(x => x.id === Number(val));
+                          if (isSpecialDiscountType(d) && !watchedEditCustomDisc) {
+                            setValueEdit('discount_amount', '3000');
+                          }
+                        }}
+                      >
+                        <MenuItem value=""><em>No Discount</em></MenuItem>
+                        {discountTypes.map((d: any) => (
+                          <MenuItem key={d.id} value={d.id}>
+                            {formatDiscountOptionLabel(d)}
+                          </MenuItem>
+                        ))}
                       </Select>
                     </FormControl>
+                  </Grid>
+
+                  {isEditSpecial && (
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Special Discount Amount (₹)"
+                        type="number"
+                        placeholder="e.g. 3000, 4000, 5000"
+                        InputLabelProps={{ shrink: true }}
+                        inputProps={{ step: "1", min: "0" }}
+                        {...registerEdit('discount_amount')}
+                      />
+                      <Box sx={{ display: 'flex', gap: 0.75, mt: 1 }}>
+                        {[3000, 4000, 5000].map(amt => (
+                          <Chip
+                            key={amt}
+                            label={`₹${amt.toLocaleString('en-IN')}`}
+                            size="small"
+                            clickable
+                            onClick={() => setValueEdit('discount_amount', String(amt))}
+                            color={Number(watchedEditCustomDisc) === amt ? 'warning' : 'default'}
+                            variant={Number(watchedEditCustomDisc) === amt ? 'filled' : 'outlined'}
+                            sx={{ fontWeight: 700, fontSize: '0.72rem' }}
+                          />
+                        ))}
+                      </Box>
+                    </Grid>
+                  )}
+
+                  {/* Live Calculation Preview Card */}
+                  <Grid item xs={12}>
+                    <Box
+                      sx={{
+                        mt: 1,
+                        p: 2,
+                        borderRadius: 2.5,
+                        bgcolor: 'rgba(79, 70, 229, 0.05)',
+                        border: '1px solid rgba(79, 70, 229, 0.2)',
+                      }}
+                    >
+                      <Grid container spacing={1} alignItems="center">
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                            BASE AMOUNT
+                          </Typography>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                            ₹{(parseFloat(String(watchedEditBase)) || 0).toLocaleString('en-IN')}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                            DISCOUNT DEDUCTED
+                          </Typography>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'success.main' }}>
+                            - ₹{editCalc.discountAmount.toLocaleString('en-IN')}
+                            {selectedEditDiscountObj && Number(selectedEditDiscountObj.percentage) > 0
+                              ? ` (${selectedEditDiscountObj.percentage}%)`
+                              : ''}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4} sx={{ textAlign: 'right' }}>
+                          <Typography variant="caption" color="primary" sx={{ fontWeight: 700 }}>
+                            NET AMOUNT PAYABLE
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: '#4f46e5' }}>
+                            ₹{editCalc.netAmount.toLocaleString('en-IN')}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Box>
                   </Grid>
                 </Grid>
               </form>
               )}
             </DialogContent>
-            <DialogActions>
+            <DialogActions sx={{ p: 2 }}>
               <Button onClick={() => setOpenEditDialog(false)}>Cancel</Button>
-              <Button type="submit" form="edit-fee-form" variant="contained" color="primary">Update</Button>
+              <Button type="submit" form="edit-fee-form" variant="contained" color="primary">
+                Update Fee (₹{editCalc.netAmount.toLocaleString('en-IN')})
+              </Button>
             </DialogActions>
           </Dialog>
         </Box>

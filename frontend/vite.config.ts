@@ -7,12 +7,13 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
+        target: 'http://localhost:8002',
       },
       '/static': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
+        target: 'http://localhost:8002',
+      },
+      '/students': {
+        target: 'http://localhost:8002',
       },
     },
   },

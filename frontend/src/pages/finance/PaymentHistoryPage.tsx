@@ -5,8 +5,9 @@ import {
   Chip, Tooltip
 } from '@mui/material';
 import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
-import { getStudentReceipts, cancelReceipt } from '../../services/payment';
+import { getStudentReceipts, cancelReceipt, sendReceiptWhatsApp } from '../../services/payment';
 import StudentSelector from '../../components/StudentSelector';
 import { getFileUrl } from '../../services/api';
 
@@ -30,6 +31,36 @@ export default function PaymentHistoryPage() {
     window.open(getFileUrl(pdfPath), '_blank');
   };
 
+  const handleSendWhatsApp = async (receipt: any) => {
+    try {
+      // Trigger backend WhatsApp service (sends via Cloud API / Gateway if configured, and returns fresh wa.me link)
+      const res = await sendReceiptWhatsApp(receipt.id);
+      if (res.whatsapp_sent) {
+        alert(`WhatsApp receipt & PDF sent automatically from School WhatsApp to ${res.recipient_name || 'Mother'} (${res.recipient_phone}).`);
+      } else if (res.whatsapp_url) {
+        window.open(res.whatsapp_url, '_blank');
+      } else if (receipt.whatsapp_url) {
+        window.open(receipt.whatsapp_url, '_blank');
+      } else {
+        const manualPhone = window.prompt("Mother Contact Number is not set for this student. Enter 10-digit WhatsApp number to send receipt:");
+        if (manualPhone && manualPhone.trim()) {
+          const retryRes = await sendReceiptWhatsApp(receipt.id, manualPhone.trim());
+          if (retryRes.whatsapp_sent) {
+            alert(`WhatsApp receipt sent to ${retryRes.recipient_phone}.`);
+          } else if (retryRes.whatsapp_url) {
+            window.open(retryRes.whatsapp_url, '_blank');
+          }
+        }
+      }
+    } catch (error: any) {
+      if (receipt.whatsapp_url) {
+        window.open(receipt.whatsapp_url, '_blank');
+      } else {
+        alert(error.response?.data?.detail || "Failed to send WhatsApp notification");
+      }
+    }
+  };
+
   const handleCancel = async (receiptId: number) => {
     const reason = window.prompt("Enter reason for cancellation:");
     if (reason) {
@@ -51,7 +82,7 @@ export default function PaymentHistoryPage() {
           Payment History & Receipts
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Track transaction ledgers, audit issued receipts, and download PDF vouchers.
+          Track transaction ledgers, audit issued receipts, download PDF vouchers, and send receipts to Mother's WhatsApp.
         </Typography>
       </Box>
       
@@ -80,6 +111,7 @@ export default function PaymentHistoryPage() {
                     <TableCell>Transaction Date</TableCell>
                     <TableCell>Receipt Number</TableCell>
                     <TableCell>Total Amount</TableCell>
+                    <TableCell>Mother Contact (WhatsApp)</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
@@ -94,6 +126,20 @@ export default function PaymentHistoryPage() {
                         {receipt.receipt_number}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>₹{receipt.total_amount}</TableCell>
+                      <TableCell sx={{ fontSize: '0.825rem' }}>
+                        {receipt.mother_contact_number || receipt.recipient_phone ? (
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.82rem' }}>
+                              {receipt.mother_name || receipt.recipient_name || 'Mother'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {receipt.mother_contact_number || receipt.recipient_phone}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography variant="caption" color="text.disabled">Not Set</Typography>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Chip 
                           label={receipt.status} 
@@ -117,6 +163,28 @@ export default function PaymentHistoryPage() {
                           >
                             PDF
                           </Button>
+                        )}
+                        {receipt.status === 'Success' && (
+                          <Tooltip title={`Send Receipt & PDF on WhatsApp to ${receipt.mother_name || 'Mother'} (${receipt.mother_contact_number || receipt.recipient_phone || 'Enter Phone'})`} arrow>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<WhatsAppIcon fontSize="small" />}
+                              onClick={() => handleSendWhatsApp(receipt)}
+                              sx={{
+                                mr: 1,
+                                borderRadius: 2,
+                                color: '#16a34a',
+                                borderColor: 'rgba(22, 163, 74, 0.45)',
+                                '&:hover': {
+                                  bgcolor: 'rgba(22, 163, 74, 0.08)',
+                                  borderColor: '#16a34a'
+                                }
+                              }}
+                            >
+                              WhatsApp
+                            </Button>
+                          </Tooltip>
                         )}
                         {receipt.status === 'Success' && (
                           <Tooltip title="Cancel Receipt & Revert Balance" arrow>
@@ -149,3 +217,4 @@ export default function PaymentHistoryPage() {
     </Box>
   );
 }
+

@@ -172,6 +172,7 @@ CREATE TABLE `discount_types` (
 
 LOCK TABLES `discount_types` WRITE;
 /*!40000 ALTER TABLE `discount_types` DISABLE KEYS */;
+INSERT INTO `discount_types` VALUES (1,'Teacher Parent','50% discount on base fee for children of school teachers',50,0,1,'2026-09-25 00:00:00',NULL),(2,'One Shot Payment','Flat ₹2,000 discount for full one-shot fee payment',0,2000,1,'2026-09-25 00:00:00',NULL),(3,'Sibling + One Shot Payment','Combined Sibling (₹1,000) + One Shot Payment (₹2,000) = ₹3,000 flat discount',0,3000,1,'2026-09-25 00:00:00',NULL),(4,'Siblings Discount','Flat ₹1,000 discount for siblings studying in the school',0,1000,1,'2026-09-25 00:00:00',NULL),(5,'Special Discount','Custom discount amount as per management / Principal instruction (e.g. ₹3,000, ₹4,000, ₹5,000)',0,0,1,'2026-09-25 00:00:00',NULL);
 /*!40000 ALTER TABLE `discount_types` ENABLE KEYS */;
 UNLOCK TABLES;
 

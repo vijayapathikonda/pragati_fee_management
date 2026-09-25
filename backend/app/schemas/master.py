@@ -124,6 +124,10 @@ class DiscountTypeCreate(DiscountTypeBase):
 
 class DiscountTypeUpdate(DiscountTypeBase):
     name: Optional[str] = None
+    description: Optional[str] = None
+    percentage: Optional[float] = None
+    flat_amount: Optional[float] = None
+    is_active: Optional[bool] = None
 
 class DiscountTypeResponse(DiscountTypeBase):
     id: int

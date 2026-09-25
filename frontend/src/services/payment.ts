@@ -14,3 +14,10 @@ export const cancelReceipt = async (receiptId: number, reason: string) => {
   const response = await api.post(`/payments/${receiptId}/cancel`, { reason });
   return response.data;
 };
+
+export const sendReceiptWhatsApp = async (receiptId: number, phoneOverride?: string) => {
+  const response = await api.post(`/payments/${receiptId}/send-whatsapp`, {
+    phone_override: phoneOverride || null,
+  });
+  return response.data;
+};

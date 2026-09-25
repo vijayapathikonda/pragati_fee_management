@@ -15,6 +15,7 @@ class UserUpdate(BaseModel):
     is_active: bool
     role_id: int
 
+@router.get("", response_model=List[UserResponse], include_in_schema=False)
 @router.get("/", response_model=List[UserResponse])
 def get_users(
     skip: int = 0,
@@ -25,6 +26,7 @@ def get_users(
     users = db.query(User).offset(skip).limit(limit).all()
     return users
 
+@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     user_in: UserCreate,

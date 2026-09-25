@@ -42,6 +42,11 @@ def seed_data():
             if not existing:
                 sec = Section(name=sec_name, description=f"Section {sec_name}")
                 db.add(sec)
+
+        # Seed Default Discount Plans
+        print("Seeding Discount Plans...")
+        from app.services.fee_service import FeeService
+        FeeService.ensure_default_discounts(db)
                 
         db.commit()
         print("Successfully seeded all data!")
