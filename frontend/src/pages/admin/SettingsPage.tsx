@@ -14,6 +14,15 @@ import {
   CircularProgress,
   Divider,
   alpha,
+  FormControlLabel,
+  Switch,
+  MenuItem,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -21,7 +30,11 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import { getSettings, updateSettings, triggerBackup } from '../../services/admin';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloudDoneIcon from '@mui/icons-material/CloudDone';
+import DownloadIcon from '@mui/icons-material/Download';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import { getSettings, updateSettings, triggerBackup, getBackupStatus, triggerGoogleDriveBackup } from '../../services/admin';
 import { getLicenseStatus, uploadLicenseFile, LicenseInfo } from '../../services/license';
 
 interface TabPanelProps {
@@ -44,6 +57,17 @@ export default function SettingsPage() {
   const [schoolInfo, setSchoolInfo] = useState<any>({});
   const [formats, setFormats] = useState<any>({});
   const [smtp, setSmtp] = useState<any>({});
+  const [backupConfig, setBackupConfig] = useState<any>({
+    auto_backup_enabled: true,
+    interval_hours: 24,
+    max_backups_to_keep: 30,
+    backup_folder_name: 'Pragathi_DB_Backups',
+  });
+  const [recentDriveBackups, setRecentDriveBackups] = useState<any[]>([]);
+  const [backingUpToDrive, setBackingUpToDrive] = useState(false);
+  const [downloadingLocalBackup, setDownloadingLocalBackup] = useState(false);
+  const [backupMsg, setBackupMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [uploadingLicense, setUploadingLicense] = useState(false);
@@ -56,6 +80,18 @@ export default function SettingsPage() {
     loadSettings();
   }, []);
 
+  const loadBackupInfo = async () => {
+    try {
+      const bStatus = await getBackupStatus();
+      if (bStatus?.config) {
+        setBackupConfig(bStatus.config);
+      }
+      if (bStatus?.recent_files) {
+        setRecentDriveBackups(bStatus.recent_files);
+      }
+    } catch {}
+  };
+
   const loadSettings = async () => {
     const school = await getSettings('school_info');
     const f = await getSettings('formats');
@@ -63,6 +99,7 @@ export default function SettingsPage() {
     setSchoolInfo(school);
     setFormats(f);
     setSmtp(s);
+    loadBackupInfo();
     try {
       const lic = await getLicenseStatus();
       setLicense(lic);
@@ -78,6 +115,43 @@ export default function SettingsPage() {
       alert('Failed to save settings.');
     }
     setSaving(false);
+  };
+
+  const handleSaveBackupConfig = async () => {
+    setSaving(true);
+    setBackupMsg(null);
+    try {
+      await updateSettings('backup', {
+        auto_backup_enabled: String(backupConfig.auto_backup_enabled),
+        interval_hours: String(backupConfig.interval_hours || 24),
+        max_backups_to_keep: String(backupConfig.max_backups_to_keep || 30),
+        backup_folder_name: String(backupConfig.backup_folder_name || 'Pragathi_DB_Backups'),
+      });
+      setBackupMsg({ type: 'success', text: 'Daily auto-backup schedule & Google Drive settings saved!' });
+      await loadBackupInfo();
+    } catch {
+      setBackupMsg({ type: 'error', text: 'Failed to save auto-backup configuration.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTriggerDriveBackupNow = async () => {
+    setBackingUpToDrive(true);
+    setBackupMsg(null);
+    try {
+      const res = await triggerGoogleDriveBackup();
+      if (res.success) {
+        setBackupMsg({ type: 'success', text: res.message || 'Database backed up to Google Drive successfully!' });
+      } else {
+        setBackupMsg({ type: 'info', text: res.message || 'Backup saved locally (Google Drive not configured yet).' });
+      }
+      await loadBackupInfo();
+    } catch (err: any) {
+      setBackupMsg({ type: 'error', text: err.response?.data?.detail || 'Google Drive backup failed.' });
+    } finally {
+      setBackingUpToDrive(false);
+    }
   };
 
   return (
@@ -96,7 +170,7 @@ export default function SettingsPage() {
           <Tab label="School Info" sx={{ fontWeight: 600, textTransform: 'none' }} />
           <Tab label="Number Formats" sx={{ fontWeight: 600, textTransform: 'none' }} />
           <Tab label="SMTP Settings" sx={{ fontWeight: 600, textTransform: 'none' }} />
-          <Tab label="Backup & Restore" sx={{ fontWeight: 600, textTransform: 'none' }} />
+          <Tab label="Backup & Google Drive" sx={{ fontWeight: 600, textTransform: 'none' }} />
           <Tab label="License & Renewal" sx={{ fontWeight: 600, textTransform: 'none' }} />
         </Tabs>
         
@@ -158,14 +232,211 @@ export default function SettingsPage() {
         </TabPanel>
         
         <TabPanel value={tab} index={3}>
-          <Typography variant="h6" gutterBottom>Database Backup</Typography>
-          <Typography variant="body2" paragraph>
-            For a full database SQL dump, please execute `mysqldump` directly on the Docker host machine. 
-            However, you can use the button below to download a ZIP archive of all uploaded files (Student Photos and Generated PDF Receipts).
-          </Typography>
-          <Button variant="outlined" color="primary" onClick={triggerBackup}>
-            Download Uploads Archive (.zip)
-          </Button>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {backupMsg && (
+              <Alert severity={backupMsg.type} onClose={() => setBackupMsg(null)}>
+                {backupMsg.text}
+              </Alert>
+            )}
+
+            {/* Status & Instant Action Card */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: (theme) =>
+                  theme.palette.mode === 'dark' ? alpha('#1e293b', 0.6) : alpha('#f8fafc', 0.8),
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                    Google Drive Automated Database Backup
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Automatically exports all Students, Fee Assignments, Receipts & Masters as <code>.sql</code>, <code>.xlsx</code> (Excel), and <code>.json</code> into Google Drive.
+                  </Typography>
+                </Box>
+                <Chip
+                  icon={backupConfig.gdrive_configured ? <CloudDoneIcon fontSize="small" /> : <WarningAmberIcon fontSize="small" />}
+                  label={backupConfig.gdrive_configured ? `Google Drive Connected (${backupConfig.gdrive_auth_type})` : 'Google Drive Not Configured'}
+                  color={backupConfig.gdrive_configured ? 'success' : 'warning'}
+                  sx={{ fontWeight: 700 }}
+                />
+              </Box>
+
+              {backupConfig.last_backup_at && (
+                <Box sx={{ mb: 2.5, p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block' }}>
+                    LAST BACKUP SUMMARY
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
+                    {backupConfig.last_backup_at} — {backupConfig.last_backup_status}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 2, mt: 1, flexWrap: 'wrap' }}>
+                    {backupConfig.last_backup_url && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        endIcon={<OpenInNewIcon fontSize="small" />}
+                        onClick={() => window.open(backupConfig.last_backup_url, '_blank')}
+                      >
+                        Open Backup ZIP in Drive
+                      </Button>
+                    )}
+                    {backupConfig.last_excel_url && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        color="success"
+                        endIcon={<OpenInNewIcon fontSize="small" />}
+                        onClick={() => window.open(backupConfig.last_excel_url, '_blank')}
+                      >
+                        Open Excel Workbook in Google Sheets
+                      </Button>
+                    )}
+                  </Box>
+                </Box>
+              )}
+
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={backingUpToDrive ? <CircularProgress size={18} color="inherit" /> : <CloudUploadIcon />}
+                  disabled={backingUpToDrive}
+                  onClick={handleTriggerDriveBackupNow}
+                  sx={{ fontWeight: 700, borderRadius: 2 }}
+                >
+                  {backingUpToDrive ? 'Uploading DB to Google Drive...' : 'Backup DB to Google Drive Now'}
+                </Button>
+
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={downloadingLocalBackup ? <CircularProgress size={18} color="inherit" /> : <DownloadIcon />}
+                  disabled={downloadingLocalBackup}
+                  onClick={async () => {
+                    setDownloadingLocalBackup(true);
+                    try {
+                      await triggerBackup();
+                    } finally {
+                      setDownloadingLocalBackup(false);
+                    }
+                  }}
+                  sx={{ fontWeight: 700, borderRadius: 2 }}
+                >
+                  {downloadingLocalBackup ? 'Preparing ZIP...' : 'Download Full DB Backup (.zip)'}
+                </Button>
+              </Box>
+            </Paper>
+
+            {/* Auto-Backup Schedule Settings */}
+            <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 2 }}>
+                Daily Auto-Backup Schedule & Retention
+              </Typography>
+              <Grid container spacing={2.5} alignItems="center">
+                <Grid item xs={12}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={Boolean(backupConfig.auto_backup_enabled)}
+                        onChange={(e) => setBackupConfig({ ...backupConfig, auto_backup_enabled: e.target.checked })}
+                      />
+                    }
+                    label="Enable Automatic Daily Database Backup to Google Drive"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Backup Frequency"
+                    value={backupConfig.interval_hours || 24}
+                    onChange={(e) => setBackupConfig({ ...backupConfig, interval_hours: Number(e.target.value) })}
+                  >
+                    <MenuItem value={24}>Daily (Every 24 Hours)</MenuItem>
+                    <MenuItem value={12}>Twice Daily (Every 12 Hours)</MenuItem>
+                    <MenuItem value={168}>Weekly (Every 7 Days)</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Google Drive Folder Name"
+                    value={backupConfig.backup_folder_name || 'Pragathi_DB_Backups'}
+                    onChange={(e) => setBackupConfig({ ...backupConfig, backup_folder_name: e.target.value })}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="number"
+                    label="Max Daily Backups to Retain"
+                    value={backupConfig.max_backups_to_keep || 30}
+                    onChange={(e) => setBackupConfig({ ...backupConfig, max_backups_to_keep: Number(e.target.value) })}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Button variant="contained" disabled={saving} onClick={handleSaveBackupConfig} sx={{ borderRadius: 2 }}>
+                    Save Auto-Backup Settings
+                  </Button>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Recent Google Drive Backups Table */}
+            {recentDriveBackups.length > 0 && (
+              <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1.5 }}>
+                  Recent Backups in Google Drive ({backupConfig.backup_folder_name || 'Pragathi_DB_Backups'})
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>File Name</TableCell>
+                        <TableCell>Created At</TableCell>
+                        <TableCell align="right">Size</TableCell>
+                        <TableCell align="right">Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {recentDriveBackups.map((f) => (
+                        <TableRow key={f.file_id} hover>
+                          <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                            {f.filename}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                            {f.created_at ? new Date(f.created_at).toLocaleString() : '-'}
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontSize: '0.8rem' }}>
+                            {f.size ? `${(f.size / 1024).toFixed(1)} KB` : '-'}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button
+                              size="small"
+                              endIcon={<OpenInNewIcon fontSize="small" />}
+                              onClick={() => window.open(f.view_url, '_blank')}
+                            >
+                              Open
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            )}
+          </Box>
         </TabPanel>
 
         {/* Tab 4: License & Renewal */}

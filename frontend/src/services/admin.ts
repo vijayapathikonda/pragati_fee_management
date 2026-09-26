@@ -22,8 +22,22 @@ export const triggerBackup = async () => {
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', 'uploads_backup.zip');
+  const dateStr = new Date().toISOString().split('T')[0];
+  link.setAttribute('download', `Pragathi_Full_DB_Backup_${dateStr}.zip`);
   document.body.appendChild(link);
   link.click();
   link.remove();
 };
+
+export const getBackupStatus = async () => {
+  const response = await api.get('/admin/backup/status');
+  return response.data;
+};
+
+export const triggerGoogleDriveBackup = async () => {
+  const response = await api.post('/admin/backup/gdrive');
+  return response.data;
+};
+
+
+

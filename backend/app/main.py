@@ -54,6 +54,7 @@ app.include_router(api_router, prefix="/api")
 def on_startup_seed_discounts():
     from app.infrastructure.database import SessionLocal
     from app.services.fee_service import FeeService
+    from app.services.backup_service import BackupService
     db = SessionLocal()
     try:
         FeeService.ensure_default_discounts(db)
@@ -61,3 +62,9 @@ def on_startup_seed_discounts():
         pass
     finally:
         db.close()
+
+    try:
+        BackupService.start_periodic_scheduler()
+    except Exception:
+        pass
+

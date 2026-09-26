@@ -76,36 +76,72 @@ def trigger_backup(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Creates a zip archive of the uploads directory (containing PDFs, Photos, etc.)
-    and returns it. For a true database backup, external shell scripts are required.
+    Creates a complete ZIP archive containing:
+    - Full SQL database dump (.sql)
+    - Multi-sheet Excel database workbook (.xlsx)
+    - Full JSON database snapshot (.json)
+    - Uploaded files (Student Photos & PDF Receipts)
     """
-    uploads_dir = "uploads"
-    backup_filename = "uploads_backup.zip"
-    backup_path = os.path.join("uploads", "temp", backup_filename)
-    
-    os.makedirs(os.path.dirname(backup_path), exist_ok=True)
-    
-    # Create zip
-    with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(uploads_dir):
-            if "temp" in root: # Skip temp dir
-                continue
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, uploads_dir)
-                zipf.write(file_path, arcname)
-                
-    # Log Backup Action
+    from fastapi.responses import Response
+    from app.services.backup_service import BackupService
+
+    zip_bytes, _excel_bytes, row_counts, ts_label = BackupService.create_full_backup_zip_bytes(db, include_uploads=True)
+    backup_filename = f"Pragathi_DB_Backup_{ts_label}.zip"
+
     AuditService.log_action(
         db,
         action="EXPORT",
-        resource="System:Backup",
+        resource="System:LocalFullBackup",
         user_id=current_user.id,
+        details={"row_counts": row_counts},
         ip_address=request.client.host if request.client else None
     )
-    
-    return FileResponse(
-        backup_path,
+
+    return Response(
+        content=zip_bytes,
         media_type="application/zip",
-        filename=backup_filename
+        headers={
+            "Content-Disposition": f'attachment; filename="{backup_filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        }
     )
+
+@router.get("/backup/status")
+def get_backup_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Returns Google Drive auto-backup configuration, last backup details, and recent Drive backup files."""
+    from app.services.backup_service import BackupService
+    from app.services.gdrive_service import gdrive_service
+
+    cfg = BackupService.get_backup_config(db)
+    folder_name = cfg.get("backup_folder_name") or "Pragathi_DB_Backups"
+    recent_files = gdrive_service.list_folder_files(folder_name=folder_name, limit=12) if gdrive_service.is_configured else []
+    return {
+        "config": cfg,
+        "recent_files": recent_files,
+    }
+
+@router.post("/backup/gdrive")
+def trigger_gdrive_backup(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Immediately backs up the full database (.zip + .xlsx) to Google Drive."""
+    from app.services.backup_service import BackupService
+
+    res = BackupService.backup_to_google_drive(db, trigger="manual")
+    AuditService.log_action(
+        db,
+        action="EXPORT",
+        resource="System:GoogleDriveBackup",
+        user_id=current_user.id,
+        details={"filename": res.get("filename"), "success": res.get("success")},
+        ip_address=request.client.host if request.client else None
+    )
+    return res
+
+
+

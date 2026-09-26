@@ -144,10 +144,11 @@ class GoogleDriveService:
         file_bytes: bytes,
         filename: str,
         mime_type: str = "application/octet-stream",
-        folder_name: Optional[str] = None
+        folder_name: Optional[str] = None,
+        make_public: bool = True
     ) -> Optional[Dict[str, str]]:
         """
-        Uploads in-memory bytes to Google Drive, sets public read access, and returns direct URLs.
+        Uploads in-memory bytes to Google Drive and returns direct URLs.
         Returns a dict: {'file_id': ..., 'view_url': ..., 'download_url': ..., 'direct_img_url': ...}
         """
         if not self.is_configured:
@@ -167,24 +168,25 @@ class GoogleDriveService:
 
             media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type, resumable=True)
             uploaded_file = self._service.files().create(
-                body=file_metadata, media_body=media, fields="id, name, webViewLink, webContentLink"
+                body=file_metadata, media_body=media, fields="id, name, webViewLink, webContentLink, createdTime, size"
             ).execute()
 
             file_id = uploaded_file.get("id")
 
-            # Set public read permission so links work directly in browser and <img> tags
-            try:
-                self._service.permissions().create(
-                    fileId=file_id,
-                    body={"type": "anyone", "role": "reader"}
-                ).execute()
-            except Exception as perm_err:
-                logger.warning(f"Could not set public permission on GDrive file {file_id}: {perm_err}")
+            # Set public read permission if requested (e.g. for student photos/receipts)
+            if make_public:
+                try:
+                    self._service.permissions().create(
+                        fileId=file_id,
+                        body={"type": "anyone", "role": "reader"}
+                    ).execute()
+                except Exception as perm_err:
+                    logger.warning(f"Could not set public permission on GDrive file {file_id}: {perm_err}")
 
             return {
                 "file_id": file_id,
                 "filename": filename,
-                "view_url": f"https://drive.google.com/file/d/{file_id}/view?usp=sharing",
+                "view_url": uploaded_file.get("webViewLink") or f"https://drive.google.com/file/d/{file_id}/view?usp=sharing",
                 "download_url": f"https://drive.google.com/uc?export=download&id={file_id}",
                 # Direct image embed URL (renders directly inside <img> tags)
                 "direct_img_url": f"https://lh3.googleusercontent.com/d/{file_id}",
@@ -192,6 +194,38 @@ class GoogleDriveService:
         except Exception as e:
             logger.error(f"Failed to upload file '{filename}' to Google Drive: {e}")
             return None
+
+    def list_folder_files(self, folder_name: str = "DB_Backups", limit: int = 15) -> list:
+        """Lists recent files in a specific Google Drive subfolder."""
+        if not self.is_configured:
+            return []
+        try:
+            folder_id = self.get_or_create_folder(folder_name)
+            if not folder_id:
+                return []
+            query = f"'{folder_id}' in parents and trashed = false"
+            results = self._service.files().list(
+                q=query,
+                spaces="drive",
+                pageSize=limit,
+                orderBy="createdTime desc",
+                fields="files(id, name, mimeType, size, createdTime, webViewLink)"
+            ).execute()
+            files = results.get("files", [])
+            return [
+                {
+                    "file_id": f.get("id"),
+                    "filename": f.get("name"),
+                    "size": int(f.get("size") or 0),
+                    "created_at": f.get("createdTime"),
+                    "view_url": f.get("webViewLink") or f"https://drive.google.com/file/d/{f.get('id')}/view",
+                    "download_url": f"https://drive.google.com/uc?export=download&id={f.get('id')}",
+                }
+                for f in files
+            ]
+        except Exception as e:
+            logger.error(f"Failed to list Google Drive folder '{folder_name}': {e}")
+            return []
 
     def upload_local_file(
         self,
@@ -226,3 +260,4 @@ class GoogleDriveService:
 
 # Global Singleton Instance
 gdrive_service = GoogleDriveService()
+
