@@ -241,15 +241,17 @@ class BackupService:
         ws_masters = wb.create_sheet(title="Masters_Config")
         style_sheet_header(ws_masters, ["Master Type", "ID", "Name / Title", "Details / Amount / Percentage", "Active"])
         for ay in db.query(AcademicYear).all():
-            ws_masters.append(["Academic Year", ay.id, ay.name, f"{ay.start_date} to {ay.end_date}", ay.is_active])
+            ws_masters.append(["Academic Year", ay.id, ay.name, f"{ay.start_date} to {ay.end_date}", bool(getattr(ay, "is_active", True))])
         for g in db.query(Grade).all():
-            ws_masters.append(["Grade", g.id, g.name, g.description or "", True])
+            ws_masters.append(["Grade", g.id, g.name, getattr(g, "description", "") or "", True])
+        for s_sec in db.query(Section).all():
+            ws_masters.append(["Section", s_sec.id, s_sec.name, getattr(s_sec, "description", "") or "", True])
         for fc in db.query(FeeCategory).all():
-            ws_masters.append(["Fee Category", fc.id, fc.name, fc.description or "", fc.is_active])
+            ws_masters.append(["Fee Category", fc.id, fc.name, getattr(fc, "description", "") or "", bool(getattr(fc, "is_active", True))])
         for dt in db.query(DiscountType).all():
-            ws_masters.append(["Discount Type", dt.id, dt.name, f"{dt.percentage}% / Flat ₹{dt.flat_amount}", dt.is_active])
+            ws_masters.append(["Discount Type", dt.id, dt.name, f"{getattr(dt, 'percentage', 0)}% / Flat ₹{getattr(dt, 'flat_amount', 0)}", bool(getattr(dt, "is_active", True))])
         for pm in db.query(PaymentMode).all():
-            ws_masters.append(["Payment Mode", pm.id, pm.name, pm.description or "", pm.is_active])
+            ws_masters.append(["Payment Mode", pm.id, pm.name, getattr(pm, "description", "") or "", bool(getattr(pm, "is_active", True))])
 
         excel_buf = io.BytesIO()
         wb.save(excel_buf)
