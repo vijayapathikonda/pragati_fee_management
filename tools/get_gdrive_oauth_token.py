@@ -28,7 +28,7 @@ def get_tokens_from_file(client_secrets_path: str):
     print("\n[!] Opening your web browser for Google Authorization...")
     print("    Log in with the Google Account whose 15 GB Drive you want to use, and click 'Allow'.\n")
     try:
-        creds = flow.run_local_server(port=0)
+        creds = flow.run_local_server(port=0, prompt="consent", access_type="offline")
     except Exception as e:
         print(f"\n[ERROR] Authorization failed: {e}")
         if "deleted_client" in str(e):
@@ -55,13 +55,13 @@ def get_tokens_from_id_secret(client_id: str, client_secret: str):
         }
     }
     flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-    print("\n[!] Opening your web browser for Google Authorization...")
-    print("    Log in with the Google Account whose 15 GB Drive you want to use, and click 'Allow'.\n")
+    print("\n[!] Opening your web browser for Google Authorization...", flush=True)
+    print("    Log in with the Google Account whose 15 GB Drive you want to use, and click 'Allow'.\n", flush=True)
     try:
-        creds = flow.run_local_server(port=0)
+        creds = flow.run_local_server(port=0, prompt="consent", access_type="offline")
         display_results(client_id, client_secret, creds.refresh_token)
     except Exception as e:
-        print(f"\n[ERROR] Authorization failed: {e}")
+        print(f"\n[ERROR] Authorization failed: {e}", flush=True)
 
 def display_results(client_id: str, client_secret: str, refresh_token: str):
     print("\n" + "=" * 75)

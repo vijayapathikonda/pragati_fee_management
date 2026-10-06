@@ -297,7 +297,7 @@ class PDFService:
         c.restoreState()
 
     @staticmethod
-    def generate_receipt_pdf(receipt: FeeReceipt, student_name: str, admission_number: str) -> str:
+    def generate_receipt_pdf(receipt: FeeReceipt, student_name: str, admission_number: str, folder_name: str = "Fee_Receipts") -> str:
         """
         Generates a 1-page A4 PDF receipt split into two halves:
           - Top Half: PARENT SLIP
@@ -362,7 +362,7 @@ class PDFService:
                     filepath,
                     filename=filename,
                     mime_type="application/pdf",
-                    folder_name="Fee_Receipts",
+                    folder_name=folder_name,
                 )
                 if result and result.get("download_url"):
                     return result["download_url"]

@@ -143,5 +143,62 @@ def trigger_gdrive_backup(
     )
     return res
 
+@router.post("/regenerate-receipts-gdrive")
+def regenerate_receipts_gdrive(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Regenerates PDF vouchers for all existing receipts and uploads them to Google Drive folder Pragathi_Fee_Receipts."""
+    from app.domain.fee_models import FeeReceipt, ReceiptStatus
+    from app.services.pdf_service import PDFService
+    from app.services.audit_service import AuditService
+
+    receipts = db.query(FeeReceipt).filter(FeeReceipt.status == ReceiptStatus.SUCCESS).order_by(FeeReceipt.id.asc()).all()
+    results = []
+
+    for r in receipts:
+        student = r.student
+        student_name = f"{student.first_name} {student.last_name or ''}".strip() if student else "Student"
+        admission_number = student.admission_number if student else "N/A"
+        try:
+            pdf_path = PDFService.generate_receipt_pdf(
+                receipt=r,
+                student_name=student_name,
+                admission_number=admission_number,
+                folder_name="Fee_Receipts"
+            )
+            r.pdf_path = pdf_path
+            db.commit()
+            results.append({
+                "id": r.id,
+                "receipt_number": r.receipt_number,
+                "student_name": student_name,
+                "pdf_path": pdf_path,
+                "status": "success"
+            })
+        except Exception as e:
+            results.append({
+                "id": r.id,
+                "receipt_number": r.receipt_number,
+                "error": str(e),
+                "status": "failed"
+            })
+
+    AuditService.log_action(
+        db,
+        action="EXPORT",
+        resource="System:RegenerateReceiptsGDrive",
+        user_id=current_user.id,
+        details={"total": len(receipts), "success_count": sum(1 for x in results if x.get("status") == "success")},
+        ip_address=request.client.host if request.client else None
+    )
+    return {
+        "total": len(receipts),
+        "success_count": sum(1 for x in results if x.get("status") == "success"),
+        "receipts": results
+    }
+
+
 
 
