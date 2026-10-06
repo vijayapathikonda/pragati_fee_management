@@ -1,5 +1,6 @@
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, date
+from typing import Optional
 from sqlalchemy.orm import Session
 from app.repositories.fee_repository import fee_assignment_repository
 from app.repositories.receipt_repository import receipt_repository
@@ -11,11 +12,16 @@ from app.services.pdf_service import PDFService
 
 class PaymentService:
     @staticmethod
-    def _generate_receipt_number(db: Session) -> str:
+    def _generate_receipt_number(db: Session, receipt_date: Optional[date] = None) -> str:
         # Simple sequence generation based on count
         count = db.query(FeeReceipt).count()
-        year = datetime.now().year
-        return f"REC-{year}-{(count + 1):04d}"
+        year = receipt_date.year if receipt_date else datetime.now().year
+        rec_num = f"REC-{year}-{(count + 1):04d}"
+        counter = count + 1
+        while db.query(FeeReceipt).filter(FeeReceipt.receipt_number == rec_num).first():
+            counter += 1
+            rec_num = f"REC-{year}-{counter:04d}"
+        return rec_num
 
     @staticmethod
     def collect_fee(db: Session, obj_in: FeeReceiptCreate, collected_by_id: int) -> FeeReceipt:
@@ -49,7 +55,13 @@ class PaymentService:
             raise AppException("Total payment amount must be greater than 0")
 
         # 2. Create Receipt
-        receipt_number = PaymentService._generate_receipt_number(db)
+        now = datetime.now()
+        if getattr(obj_in, "receipt_date", None):
+            receipt_created_at = datetime.combine(obj_in.receipt_date, now.time())
+        else:
+            receipt_created_at = now
+
+        receipt_number = PaymentService._generate_receipt_number(db, receipt_date=getattr(obj_in, "receipt_date", None))
         receipt = FeeReceipt(
             receipt_number=receipt_number,
             student_id=obj_in.student_id,
@@ -57,7 +69,8 @@ class PaymentService:
             payment_mode_id=obj_in.payment_mode_id,
             transaction_reference=obj_in.transaction_reference,
             status=ReceiptStatus.SUCCESS,
-            collected_by_id=collected_by_id
+            collected_by_id=collected_by_id,
+            created_at=receipt_created_at
         )
         db.add(receipt)
         db.flush() # Get receipt ID

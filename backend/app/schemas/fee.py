@@ -102,6 +102,7 @@ class FeeReceiptCreate(BaseModel):
     student_id: int
     payment_mode_id: int
     transaction_reference: Optional[str] = None
+    receipt_date: Optional[date] = None
     send_whatsapp: bool = True
     mother_phone_override: Optional[str] = None
     items: List[FeePaymentItemCreate]

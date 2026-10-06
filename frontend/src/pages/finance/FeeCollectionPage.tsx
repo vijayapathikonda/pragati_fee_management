@@ -23,6 +23,17 @@ export default function FeeCollectionPage() {
   const [paymentModes, setPaymentModes] = useState<any[]>([]);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<number | ''>('');
   const [transactionRef, setTransactionRef] = useState('');
+
+  // Helper to format today's date as YYYY-MM-DD for standard date input
+  const getTodayDateString = () => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const [receiptDate, setReceiptDate] = useState<string>(getTodayDateString());
   
   // WhatsApp notification state (targets Mother contact number by default)
   const [sendWhatsApp, setSendWhatsApp] = useState<boolean>(true);
@@ -128,6 +139,7 @@ export default function FeeCollectionPage() {
       student_id: selectedStudentId,
       payment_mode_id: selectedPaymentMode,
       transaction_reference: transactionRef,
+      receipt_date: receiptDate || undefined,
       items: items,
       send_whatsapp: sendWhatsApp,
       mother_phone_override: motherPhone.trim() || undefined
@@ -146,6 +158,7 @@ export default function FeeCollectionPage() {
       // Reset form
       setTransactionRef('');
       setSelectedPaymentMode('');
+      setReceiptDate(getTodayDateString());
       loadOutstandingFees();
     } catch (error: any) {
       alert(error.response?.data?.detail || "Payment failed");
@@ -298,8 +311,8 @@ export default function FeeCollectionPage() {
           <Typography variant="h6" sx={{ fontWeight: 800, mb: 2 }}>
             Payment Summary & Checkout
           </Typography>
-          <Grid container spacing={3} alignItems="center">
-            <Grid item xs={12} sm={4}>
+          <Grid container spacing={2.5} alignItems="center">
+            <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
                 Total Payable Amount
               </Typography>
@@ -307,7 +320,19 @@ export default function FeeCollectionPage() {
                 ₹{getTotalPaying().toFixed(2)}
               </Typography>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField
+                size="small"
+                fullWidth
+                type="date"
+                label="Receipt Date"
+                InputLabelProps={{ shrink: true }}
+                value={receiptDate}
+                onChange={(e) => setReceiptDate(e.target.value)}
+                helperText="Select current or past payment date"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
               <FormControl fullWidth size="small">
                 <InputLabel>Payment Channel</InputLabel>
                 <Select
@@ -321,7 +346,7 @@ export default function FeeCollectionPage() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6} md={3}>
               <TextField 
                 size="small" 
                 fullWidth 
@@ -422,9 +447,19 @@ export default function FeeCollectionPage() {
             <Typography variant="body2" color="text.secondary" gutterBottom>
               Official 2-in-1 A4 Receipt (Parent Slip + School Slip) has been generated.
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main' }}>
-              Amount Paid: ₹{Number(lastReceipt?.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                Amount Paid: ₹{Number(lastReceipt?.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </Typography>
+              {lastReceipt?.created_at && (
+                <Chip
+                  label={`Receipt Date: ${new Date(lastReceipt.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontWeight: 600 }}
+                />
+              )}
+            </Box>
           </Box>
 
           <Divider sx={{ my: 2 }} />
