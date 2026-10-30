@@ -139,7 +139,7 @@ class HallTicketService:
         # 2. Official School Header (Crimson)
         pdf.setFillColor(colors.HexColor("#b91c1c"))
         pdf.setFont("Helvetica-Bold", 13)
-        pdf.drawCentredString(x0 + width / 2, y0 + height - 20, "PRAGATI VIDYALAYA, Challakere")
+        pdf.drawCentredString(x0 + width / 2, y0 + height - 20, "PRAGATI VIDYALAYA")
 
         pdf.setFillColor(colors.HexColor("#334155"))
         pdf.setFont("Helvetica-Bold", 7.5)
@@ -234,11 +234,17 @@ class HallTicketService:
             ["SL", "SUBJECT", "MAX MARKS", "EXAM DATE", "TIME", "INVIGILATOR SIGN"]
         ]
         for idx, sub in enumerate(subjects, start=1):
+            raw_date = str(sub.get("date", "-"))
+            formatted_date = raw_date
+            if raw_date and "-" in raw_date:
+                parts = raw_date.split("-")
+                if len(parts) == 3 and len(parts[0]) == 4:
+                    formatted_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
             table_data.append([
                 str(idx),
                 str(sub.get("name", "")),
                 str(sub.get("max_marks", "100")),
-                str(sub.get("date", "-")),
+                formatted_date,
                 str(sub.get("time", "-")),
                 ""
             ])

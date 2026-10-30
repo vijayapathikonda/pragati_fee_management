@@ -499,6 +499,18 @@ export default function HallTicketPage() {
 }
 
 /**
+ * Helper to format date string from YYYY-MM-DD to DD-MM-YYYY
+ */
+function formatDateToDDMMYYYY(dateStr?: string): string {
+  if (!dateStr) return '-';
+  const parts = dateStr.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
+}
+
+/**
  * Helper to render an individual, authentic Hall Ticket card
  */
 function renderSingleHallTicket(
@@ -545,7 +557,7 @@ function renderSingleHallTicket(
               letterSpacing: '0.04em',
             }}
           >
-            PRAGATI VIDYALAYA, Challakere
+            PRAGATI VIDYALAYA
           </Typography>
           <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155', mt: 0.15 }}>
             CBSE Affiliated No. 831401 &nbsp;|&nbsp; DISE No. 29130220703 &nbsp;|&nbsp; Mob: 7996622466 / 8660573737
@@ -664,7 +676,7 @@ function renderSingleHallTicket(
               <td style={{ border: '1px solid #64748b', padding: '2px 4px' }}>{idx + 1}</td>
               <td style={{ border: '1px solid #64748b', padding: '2px 6px', textAlign: 'left', fontWeight: 600 }}>{sub.name}</td>
               <td style={{ border: '1px solid #64748b', padding: '2px 4px' }}>{sub.max_marks}</td>
-              <td style={{ border: '1px solid #64748b', padding: '2px 4px' }}>{sub.date || '-'}</td>
+              <td style={{ border: '1px solid #64748b', padding: '2px 4px' }}>{formatDateToDDMMYYYY(sub.date)}</td>
               <td style={{ border: '1px solid #64748b', padding: '2px 4px', fontSize: '0.7rem' }}>{sub.time || '-'}</td>
               <td style={{ border: '1px solid #64748b', padding: '2px 4px' }}></td>
             </tr>

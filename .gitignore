@@ -62,3 +62,5 @@ client_secret*.json
 
 
 
+backups/*.json
+tools/clean_fee_collections.py
