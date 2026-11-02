@@ -107,7 +107,7 @@ ARTIFACT_CATALOG = [
         "title": "Examination Hall Ticket",
         "category": "Student Certificates",
         "filename": "Hall ticket.docx",
-        "description": "Student examination hall ticket with subject schedule, marks, and invigilator sign blocks.",
+        "description": "Student examination hall ticket with subject schedule, and invigilator sign blocks.",
         "icon": "FactCheck",
         "type": "student",
         "fields": [

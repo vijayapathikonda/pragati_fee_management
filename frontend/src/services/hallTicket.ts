@@ -2,7 +2,7 @@ import api from './api';
 
 export interface SubjectScheduleItem {
   name: string;
-  max_marks: string;
+  max_marks?: string;
   date: string;
   time: string;
 }

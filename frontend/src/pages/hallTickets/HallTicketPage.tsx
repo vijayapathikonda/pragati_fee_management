@@ -20,12 +20,12 @@ import {
 } from '../../services/hallTicket';
 
 const DEFAULT_SUBJECTS: SubjectScheduleItem[] = [
-  { name: 'Kannada', max_marks: '100', date: '2026-09-22', time: '10:00 AM - 12:30 PM' },
-  { name: 'English', max_marks: '100', date: '2026-09-23', time: '10:00 AM - 12:30 PM' },
-  { name: 'Hindi', max_marks: '100', date: '2026-09-24', time: '10:00 AM - 12:30 PM' },
-  { name: 'Mathematics', max_marks: '100', date: '2026-09-25', time: '10:00 AM - 12:30 PM' },
-  { name: 'Science', max_marks: '100', date: '2026-09-26', time: '10:00 AM - 12:30 PM' },
-  { name: 'Social Science', max_marks: '100', date: '2026-09-28', time: '10:00 AM - 12:30 PM' },
+  { name: 'Kannada', date: '2026-09-22', time: '10:00 AM - 12:30 PM' },
+  { name: 'English', date: '2026-09-23', time: '10:00 AM - 12:30 PM' },
+  { name: 'Hindi', date: '2026-09-24', time: '10:00 AM - 12:30 PM' },
+  { name: 'Mathematics', date: '2026-09-25', time: '10:00 AM - 12:30 PM' },
+  { name: 'Science', date: '2026-09-26', time: '10:00 AM - 12:30 PM' },
+  { name: 'Social Science', date: '2026-09-28', time: '10:00 AM - 12:30 PM' },
 ];
 
 export default function HallTicketPage() {
@@ -87,7 +87,7 @@ export default function HallTicketPage() {
   const handleAddSubject = () => {
     setSubjects(prev => [
       ...prev,
-      { name: '', max_marks: '100', date: '', time: '10:00 AM - 12:30 PM' }
+      { name: '', date: '', time: '10:00 AM - 12:30 PM' }
     ]);
   };
 
@@ -245,9 +245,8 @@ export default function HallTicketPage() {
             <TableHead sx={{ bgcolor: '#f8fafc' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700, width: '5%' }}>#</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: '35%' }}>Subject Name</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: '15%' }}>Max Marks</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: '20%' }}>Exam Date</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: '45%' }}>Subject Name</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: '25%' }}>Exam Date</TableCell>
                 <TableCell sx={{ fontWeight: 700, width: '20%' }}>Exam Time</TableCell>
                 <TableCell sx={{ fontWeight: 700, width: '5%', textAlign: 'center' }}>Remove</TableCell>
               </TableRow>
@@ -263,14 +262,6 @@ export default function HallTicketPage() {
                       value={sub.name}
                       placeholder="e.g. Mathematics"
                       onChange={e => handleSubjectChange(idx, 'name', e.target.value)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      value={sub.max_marks}
-                      onChange={e => handleSubjectChange(idx, 'max_marks', e.target.value)}
                     />
                   </TableCell>
                   <TableCell>
@@ -663,10 +654,9 @@ function renderSingleHallTicket(
         <thead>
           <tr style={{ background: '#f8fafc', color: '#1e293b' }}>
             <th style={{ border: '1px solid #475569', padding: '2px 4px', width: '6%' }}>SL</th>
-            <th style={{ border: '1px solid #475569', padding: '2px 6px', textAlign: 'left', width: '32%' }}>SUBJECT</th>
-            <th style={{ border: '1px solid #475569', padding: '2px 4px', width: '14%' }}>MAX MARKS</th>
-            <th style={{ border: '1px solid #475569', padding: '2px 4px', width: '16%' }}>EXAM DATE</th>
-            <th style={{ border: '1px solid #475569', padding: '2px 4px', width: '18%' }}>TIME</th>
+            <th style={{ border: '1px solid #475569', padding: '2px 6px', textAlign: 'left', width: '40%' }}>SUBJECT</th>
+            <th style={{ border: '1px solid #475569', padding: '2px 4px', width: '20%' }}>EXAM DATE</th>
+            <th style={{ border: '1px solid #475569', padding: '2px 4px', width: '20%' }}>TIME</th>
             <th style={{ border: '1px solid #475569', padding: '2px 4px', width: '14%' }}>INVIGILATOR</th>
           </tr>
         </thead>
@@ -675,7 +665,6 @@ function renderSingleHallTicket(
             <tr key={idx} style={{ background: idx % 2 === 1 ? '#fafafa' : '#ffffff' }}>
               <td style={{ border: '1px solid #64748b', padding: '2px 4px' }}>{idx + 1}</td>
               <td style={{ border: '1px solid #64748b', padding: '2px 6px', textAlign: 'left', fontWeight: 600 }}>{sub.name}</td>
-              <td style={{ border: '1px solid #64748b', padding: '2px 4px' }}>{sub.max_marks}</td>
               <td style={{ border: '1px solid #64748b', padding: '2px 4px' }}>{formatDateToDDMMYYYY(sub.date)}</td>
               <td style={{ border: '1px solid #64748b', padding: '2px 4px', fontSize: '0.7rem' }}>{sub.time || '-'}</td>
               <td style={{ border: '1px solid #64748b', padding: '2px 4px' }}></td>

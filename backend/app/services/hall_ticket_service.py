@@ -231,7 +231,7 @@ class HallTicketService:
 
         # 6. Subjects Schedule Table
         table_data = [
-            ["SL", "SUBJECT", "MAX MARKS", "EXAM DATE", "TIME", "INVIGILATOR SIGN"]
+            ["SL", "SUBJECT", "EXAM DATE", "TIME", "INVIGILATOR SIGN"]
         ]
         for idx, sub in enumerate(subjects, start=1):
             raw_date = str(sub.get("date", "-"))
@@ -243,13 +243,12 @@ class HallTicketService:
             table_data.append([
                 str(idx),
                 str(sub.get("name", "")),
-                str(sub.get("max_marks", "100")),
                 formatted_date,
                 str(sub.get("time", "-")),
                 ""
             ])
 
-        col_widths = [24, 150, 60, 80, 115, 102]  # Total: 531 pt
+        col_widths = [24, 190, 95, 120, 102]  # Total: 531 pt
         t = Table(table_data, colWidths=col_widths)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#f8fafc")),
