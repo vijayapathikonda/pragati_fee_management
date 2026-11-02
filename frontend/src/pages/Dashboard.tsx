@@ -29,6 +29,7 @@ import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined';
+import ReceiptIcon from '@mui/icons-material/Receipt';
 import api from '../services/api';
 import { getDashboardSummary } from '../services/dashboard';
 
@@ -265,10 +266,10 @@ export default function Dashboard() {
           <Skeleton variant="text" width={220} height={40} />
           <Skeleton variant="text" width={340} height={20} />
         </Box>
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {[1, 2, 3, 4].map((i) => (
-            <Grid item xs={12} sm={6} md={3} key={i}>
-              <Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} />
+        <Grid container spacing={2.5} sx={{ mb: 4 }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Grid item xs={12} sm={6} md={2.4} key={i}>
+              <Skeleton variant="rounded" height={160} sx={{ borderRadius: 3.5 }} />
             </Grid>
           ))}
         </Grid>
@@ -284,8 +285,23 @@ export default function Dashboard() {
     );
   }
 
-  const { cards, charts, lists } = data || {
-    cards: { total_students: 0, active_students: 0, today_collection: 0, monthly_collection: 0, outstanding_amount: 0, tuition_outstanding: 0, bus_outstanding: 0 },
+  const { cards, charts, lists, category_summary = [] } = data || {
+    cards: {
+      total_students: 0,
+      active_students: 0,
+      today_collection: 0,
+      monthly_collection: 0,
+      yearly_collection: 0,
+      total_assigned: 0,
+      tuition_assigned: 0,
+      bus_assigned: 0,
+      total_paid: 0,
+      tuition_paid: 0,
+      bus_paid: 0,
+      outstanding_amount: 0,
+      tuition_outstanding: 0,
+      bus_outstanding: 0,
+    },
     charts: {
       daily_collection: { labels: [], series: [] },
       payment_mode_distribution: { labels: [], series: [] },
@@ -293,6 +309,7 @@ export default function Dashboard() {
       category_outstanding: { labels: [], series: [] },
     },
     lists: { top_defaulters: [], recent_payments: [] },
+    category_summary: [],
   };
 
   return (
@@ -392,10 +409,10 @@ export default function Dashboard() {
         </Grid>
       </Paper>
 
-      {/* Modern KPI Metric Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      {/* Modern 5-KPI Metric Cards */}
+      <Grid container spacing={2.5} sx={{ mb: 4 }}>
         {/* Card 1: Students */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <Card
             sx={{
               height: '100%',
@@ -411,7 +428,7 @@ export default function Dashboard() {
               },
             }}
           >
-            <CardContent sx={{ p: 2.75, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <CardContent sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
@@ -438,26 +455,193 @@ export default function Dashboard() {
                     / {cards.total_students}
                   </Typography>
                 </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5 }}>
+                  <Chip
+                    label="Active vs Total"
+                    size="small"
+                    sx={{
+                      height: 22,
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      bgcolor: alpha(theme.palette.primary.main, 0.08),
+                      color: 'primary.main',
+                    }}
+                  />
+                </Box>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5 }}>
-                <Chip
-                  label="Active vs Total"
-                  size="small"
+
+              <Box
+                sx={{
+                  pt: 1.25,
+                  mt: 'auto',
+                  borderTop: `1px dashed ${theme.palette.divider}`,
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 1.25,
+                }}
+              >
+                <Box
                   sx={{
-                    height: 22,
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    bgcolor: alpha(theme.palette.primary.main, 0.08),
-                    color: 'primary.main',
+                    p: 1,
+                    borderRadius: 2,
+                    bgcolor: isDark ? alpha(theme.palette.primary.main, 0.12) : alpha(theme.palette.primary.main, 0.05),
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
                   }}
-                />
+                >
+                  <Typography variant="caption" sx={{ display: 'block', fontSize: '0.67rem', fontWeight: 700, color: 'primary.main', textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+                    Active
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary', mt: 0.25, fontSize: '0.85rem' }}>
+                    {cards.active_students}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 2,
+                    bgcolor: isDark ? alpha(theme.palette.text.secondary, 0.12) : alpha(theme.palette.text.secondary, 0.05),
+                    border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+                  }}
+                >
+                  <Typography variant="caption" sx={{ display: 'block', fontSize: '0.67rem', fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+                    Total
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary', mt: 0.25, fontSize: '0.85rem' }}>
+                    {cards.total_students}
+                  </Typography>
+                </Box>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Card 2: Today's Collection */}
-        <Grid item xs={12} sm={6} md={3}>
+        {/* Card 2: Total Fee Assigned with Tuition & Bus Breakdown */}
+        <Grid item xs={12} sm={6} md={2.4}>
+          <Card
+            sx={{
+              height: '100%',
+              borderRadius: 3.5,
+              position: 'relative',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: isDark ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(79, 70, 229, 0.08)',
+              },
+            }}
+          >
+            <CardContent sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Total Fee Assigned
+                  </Typography>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '10px',
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      color: 'primary.main',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <ReceiptIcon fontSize="small" />
+                  </Box>
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: 'primary.main', mb: 0.75 }}>
+                  {formatCurrency(cards.total_assigned || 0)}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5 }}>
+                  <Chip
+                    label="Overall Assigned"
+                    size="small"
+                    sx={{
+                      height: 22,
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      color: 'primary.main',
+                    }}
+                  />
+                </Box>
+              </Box>
+
+              {/* Dedicated Separate Breakdown: Tuition vs Bus */}
+              <Box
+                sx={{
+                  pt: 1.25,
+                  mt: 'auto',
+                  borderTop: `1px dashed ${theme.palette.divider}`,
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 1.25,
+                }}
+              >
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 2,
+                    bgcolor: isDark ? alpha(theme.palette.primary.main, 0.12) : alpha(theme.palette.primary.main, 0.05),
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: 'block',
+                      fontSize: '0.67rem',
+                      fontWeight: 700,
+                      color: 'primary.main',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.03em',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Tuition Fee
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary', mt: 0.25, fontSize: '0.85rem' }}>
+                    {formatCurrency(cards.tuition_assigned || 0)}
+                  </Typography>
+                </Box>
+
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 2,
+                    bgcolor: isDark ? alpha(theme.palette.warning.main, 0.12) : alpha(theme.palette.warning.main, 0.05),
+                    border: `1px solid ${alpha(theme.palette.warning.main, 0.22)}`,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: 'block',
+                      fontSize: '0.67rem',
+                      fontWeight: 700,
+                      color: 'warning.main',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.03em',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Bus Fee
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary', mt: 0.25, fontSize: '0.85rem' }}>
+                    {formatCurrency(cards.bus_assigned || 0)}
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Card 3: Today's Collection */}
+        <Grid item xs={12} sm={6} md={2.4}>
           <Card
             sx={{
               height: '100%',
@@ -473,7 +657,7 @@ export default function Dashboard() {
               },
             }}
           >
-            <CardContent sx={{ p: 2.75, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <CardContent sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
@@ -497,27 +681,49 @@ export default function Dashboard() {
                 <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: 'success.main', mb: 0.75 }}>
                   {formatCurrency(cards.today_collection)}
                 </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5 }}>
+                  <Chip
+                    icon={<TrendingUpOutlinedIcon style={{ fontSize: '0.85rem' }} />}
+                    label="Daily Cashflow"
+                    size="small"
+                    sx={{
+                      height: 22,
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      bgcolor: alpha(theme.palette.success.main, 0.1),
+                      color: 'success.main',
+                    }}
+                  />
+                </Box>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5 }}>
-                <Chip
-                  icon={<TrendingUpOutlinedIcon style={{ fontSize: '0.85rem' }} />}
-                  label="Daily Cashflow"
-                  size="small"
-                  sx={{
-                    height: 22,
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    bgcolor: alpha(theme.palette.success.main, 0.1),
-                    color: 'success.main',
-                  }}
-                />
+
+              <Box
+                sx={{
+                  pt: 1.25,
+                  mt: 'auto',
+                  borderTop: `1px dashed ${theme.palette.divider}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  p: 1,
+                  borderRadius: 2,
+                  bgcolor: isDark ? alpha(theme.palette.success.main, 0.08) : alpha(theme.palette.success.main, 0.04),
+                  border: `1px solid ${alpha(theme.palette.success.main, 0.15)}`,
+                }}
+              >
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, fontSize: '0.67rem', textTransform: 'uppercase' }}>
+                  Channel
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: 'success.main', fontSize: '0.85rem' }}>
+                  POS & Online
+                </Typography>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Card 3: Monthly Collection */}
-        <Grid item xs={12} sm={6} md={3}>
+        {/* Card 4: Monthly Inflow */}
+        <Grid item xs={12} sm={6} md={2.4}>
           <Card
             sx={{
               height: '100%',
@@ -533,7 +739,7 @@ export default function Dashboard() {
               },
             }}
           >
-            <CardContent sx={{ p: 2.75, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <CardContent sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
@@ -557,26 +763,48 @@ export default function Dashboard() {
                 <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', mb: 0.75 }}>
                   {formatCurrency(cards.monthly_collection)}
                 </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5 }}>
+                  <Chip
+                    label="Current Month"
+                    size="small"
+                    sx={{
+                      height: 22,
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      bgcolor: alpha(theme.palette.info.main, 0.1),
+                      color: 'info.main',
+                    }}
+                  />
+                </Box>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5 }}>
-                <Chip
-                  label="Current Month"
-                  size="small"
-                  sx={{
-                    height: 22,
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    bgcolor: alpha(theme.palette.info.main, 0.1),
-                    color: 'info.main',
-                  }}
-                />
+
+              <Box
+                sx={{
+                  pt: 1.25,
+                  mt: 'auto',
+                  borderTop: `1px dashed ${theme.palette.divider}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  p: 1,
+                  borderRadius: 2,
+                  bgcolor: isDark ? alpha(theme.palette.info.main, 0.08) : alpha(theme.palette.info.main, 0.04),
+                  border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
+                }}
+              >
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, fontSize: '0.67rem', textTransform: 'uppercase' }}>
+                  Annual Inflow
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: 'info.main', fontSize: '0.85rem' }}>
+                  {formatCurrency(cards.yearly_collection || 0)}
+                </Typography>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Card 4: Total Outstanding with Tuition & Bus Separation */}
-        <Grid item xs={12} sm={6} md={3}>
+        {/* Card 5: Total Outstanding with Tuition & Bus Separation */}
+        <Grid item xs={12} sm={6} md={2.4}>
           <Card
             sx={{
               height: '100%',
@@ -592,7 +820,7 @@ export default function Dashboard() {
               },
             }}
           >
-            <CardContent sx={{ p: 2.75, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <CardContent sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
@@ -635,6 +863,7 @@ export default function Dashboard() {
               <Box
                 sx={{
                   pt: 1.25,
+                  mt: 'auto',
                   borderTop: `1px dashed ${theme.palette.divider}`,
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
@@ -748,6 +977,113 @@ export default function Dashboard() {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Fee Category Financial Summary Table */}
+      <Paper sx={{ p: 3, mb: 4, borderRadius: 3.5, border: `1px solid ${theme.palette.divider}` }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Fee Category Financial Overview
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Overall assigned amount, collections, and pending dues broken down by category
+            </Typography>
+          </Box>
+          <Chip
+            label="Tuition & Bus Breakdown"
+            size="small"
+            sx={{
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+              color: 'primary.main',
+              fontWeight: 600,
+              fontSize: '0.725rem',
+            }}
+          />
+        </Box>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Fee Category</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Total Assigned</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Total Collected</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Outstanding Balance</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700 }}>Collection %</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {category_summary.map((cat: any) => (
+                <TableRow key={cat.category_name} hover>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                      <Box
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          bgcolor: cat.category_name.toLowerCase().includes('tut')
+                            ? theme.palette.primary.main
+                            : theme.palette.warning.main,
+                        }}
+                      />
+                      {cat.category_name}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}>
+                    {formatCurrency(cat.total_assigned)}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, color: 'success.main' }}>
+                    {formatCurrency(cat.total_paid)}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, color: 'error.main' }}>
+                    {formatCurrency(cat.total_outstanding)}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      label={`${cat.collection_percentage}%`}
+                      size="small"
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        bgcolor: alpha(
+                          cat.collection_percentage >= 70 ? theme.palette.success.main : theme.palette.warning.main,
+                          0.12
+                        ),
+                        color: cat.collection_percentage >= 70 ? 'success.main' : 'warning.main',
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {/* Overall Total Summary Row */}
+              <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.08) }}>
+                <TableCell sx={{ fontWeight: 800 }}>Overall Total</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800 }}>
+                  {formatCurrency(cards.total_assigned || 0)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, color: 'success.main' }}>
+                  {formatCurrency(cards.total_paid || 0)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, color: 'error.main' }}>
+                  {formatCurrency(cards.outstanding_amount || 0)}
+                </TableCell>
+                <TableCell align="center">
+                  <Chip
+                    label={`${
+                      cards.total_assigned > 0
+                        ? ((Number(cards.total_paid) / Number(cards.total_assigned)) * 100).toFixed(1)
+                        : '0.0'
+                    }%`}
+                    size="small"
+                    color="primary"
+                    sx={{ fontWeight: 800, fontSize: '0.75rem' }}
+                  />
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
 
       {/* Secondary Analytics: Categories */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
