@@ -177,13 +177,26 @@ class FeeService:
         total_assigned = sum((a.net_amount or Decimal("0.00")) for a in assignments)
         total_paid = sum((a.paid_amount or Decimal("0.00")) for a in assignments)
         
+        tuition_outstanding = sum(
+            ((a.net_amount or Decimal("0.00")) - (a.paid_amount or Decimal("0.00")))
+            for a in assignments
+            if a.fee_category and "tut" in (a.fee_category.name or "").lower()
+        )
+        bus_outstanding = sum(
+            ((a.net_amount or Decimal("0.00")) - (a.paid_amount or Decimal("0.00")))
+            for a in assignments
+            if a.fee_category and ("bus" in (a.fee_category.name or "").lower() or "transport" in (a.fee_category.name or "").lower())
+        )
+
         return StudentFeeSummary(
             student_id=student_id,
             total_base=total_base,
             total_discount=total_discount,
             total_assigned=total_assigned,
             total_paid=total_paid,
-            total_outstanding=total_assigned - total_paid
+            total_outstanding=total_assigned - total_paid,
+            tuition_outstanding=tuition_outstanding,
+            bus_outstanding=bus_outstanding
         )
 
     @staticmethod

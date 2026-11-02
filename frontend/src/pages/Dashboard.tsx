@@ -285,7 +285,7 @@ export default function Dashboard() {
   }
 
   const { cards, charts, lists } = data || {
-    cards: { total_students: 0, active_students: 0, today_collection: 0, monthly_collection: 0, outstanding_amount: 0 },
+    cards: { total_students: 0, active_students: 0, today_collection: 0, monthly_collection: 0, outstanding_amount: 0, tuition_outstanding: 0, bus_outstanding: 0 },
     charts: {
       daily_collection: { labels: [], series: [] },
       payment_mode_distribution: { labels: [], series: [] },
@@ -402,6 +402,8 @@ export default function Dashboard() {
               borderRadius: 3.5,
               position: 'relative',
               overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
               transition: 'transform 0.2s ease, box-shadow 0.2s ease',
               '&:hover': {
                 transform: 'translateY(-2px)',
@@ -409,33 +411,35 @@ export default function Dashboard() {
               },
             }}
           >
-            <CardContent sx={{ p: 2.75 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Student Enrollment
-                </Typography>
-                <Box
-                  sx={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: '10px',
-                    bgcolor: alpha(theme.palette.primary.main, 0.1),
-                    color: 'primary.main',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <PeopleAltOutlinedIcon fontSize="small" />
+            <CardContent sx={{ p: 2.75, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Student Enrollment
+                  </Typography>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '10px',
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      color: 'primary.main',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <PeopleAltOutlinedIcon fontSize="small" />
+                  </Box>
                 </Box>
-              </Box>
-              <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', mb: 0.75 }}>
-                {cards.active_students}{' '}
-                <Typography component="span" variant="h6" color="text.secondary" sx={{ fontWeight: 500 }}>
-                  / {cards.total_students}
+                <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', mb: 0.75 }}>
+                  {cards.active_students}{' '}
+                  <Typography component="span" variant="h6" color="text.secondary" sx={{ fontWeight: 500 }}>
+                    / {cards.total_students}
+                  </Typography>
                 </Typography>
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5 }}>
                 <Chip
                   label="Active vs Total"
                   size="small"
@@ -460,6 +464,8 @@ export default function Dashboard() {
               borderRadius: 3.5,
               position: 'relative',
               overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
               transition: 'transform 0.2s ease, box-shadow 0.2s ease',
               '&:hover': {
                 transform: 'translateY(-2px)',
@@ -467,30 +473,32 @@ export default function Dashboard() {
               },
             }}
           >
-            <CardContent sx={{ p: 2.75 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Today's Collection
-                </Typography>
-                <Box
-                  sx={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: '10px',
-                    bgcolor: alpha(theme.palette.success.main, 0.1),
-                    color: 'success.main',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <PaymentsOutlinedIcon fontSize="small" />
+            <CardContent sx={{ p: 2.75, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Today's Collection
+                  </Typography>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '10px',
+                      bgcolor: alpha(theme.palette.success.main, 0.1),
+                      color: 'success.main',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <PaymentsOutlinedIcon fontSize="small" />
+                  </Box>
                 </Box>
+                <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: 'success.main', mb: 0.75 }}>
+                  {formatCurrency(cards.today_collection)}
+                </Typography>
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: 'success.main', mb: 0.75 }}>
-                {formatCurrency(cards.today_collection)}
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5 }}>
                 <Chip
                   icon={<TrendingUpOutlinedIcon style={{ fontSize: '0.85rem' }} />}
                   label="Daily Cashflow"
@@ -516,6 +524,8 @@ export default function Dashboard() {
               borderRadius: 3.5,
               position: 'relative',
               overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
               transition: 'transform 0.2s ease, box-shadow 0.2s ease',
               '&:hover': {
                 transform: 'translateY(-2px)',
@@ -523,30 +533,32 @@ export default function Dashboard() {
               },
             }}
           >
-            <CardContent sx={{ p: 2.75 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Monthly Inflow
-                </Typography>
-                <Box
-                  sx={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: '10px',
-                    bgcolor: alpha(theme.palette.info.main, 0.1),
-                    color: 'info.main',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <AccountBalanceWalletOutlinedIcon fontSize="small" />
+            <CardContent sx={{ p: 2.75, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Monthly Inflow
+                  </Typography>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '10px',
+                      bgcolor: alpha(theme.palette.info.main, 0.1),
+                      color: 'info.main',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <AccountBalanceWalletOutlinedIcon fontSize="small" />
+                  </Box>
                 </Box>
+                <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', mb: 0.75 }}>
+                  {formatCurrency(cards.monthly_collection)}
+                </Typography>
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', mb: 0.75 }}>
-                {formatCurrency(cards.monthly_collection)}
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5 }}>
                 <Chip
                   label="Current Month"
                   size="small"
@@ -563,7 +575,7 @@ export default function Dashboard() {
           </Card>
         </Grid>
 
-        {/* Card 4: Total Outstanding */}
+        {/* Card 4: Total Outstanding with Tuition & Bus Separation */}
         <Grid item xs={12} sm={6} md={3}>
           <Card
             sx={{
@@ -571,6 +583,8 @@ export default function Dashboard() {
               borderRadius: 3.5,
               position: 'relative',
               overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
               transition: 'transform 0.2s ease, box-shadow 0.2s ease',
               '&:hover': {
                 transform: 'translateY(-2px)',
@@ -578,41 +592,108 @@ export default function Dashboard() {
               },
             }}
           >
-            <CardContent sx={{ p: 2.75 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Total Dues Outstanding
+            <CardContent sx={{ p: 2.75, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Total Dues Outstanding
+                  </Typography>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '10px',
+                      bgcolor: alpha(theme.palette.error.main, 0.1),
+                      color: 'error.main',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <WarningAmberOutlinedIcon fontSize="small" />
+                  </Box>
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: 'error.main', mb: 0.75 }}>
+                  {formatCurrency(cards.outstanding_amount)}
                 </Typography>
-                <Box
-                  sx={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: '10px',
-                    bgcolor: alpha(theme.palette.error.main, 0.1),
-                    color: 'error.main',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <WarningAmberOutlinedIcon fontSize="small" />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5 }}>
+                  <Chip
+                    label="Uncollected Fees"
+                    size="small"
+                    sx={{
+                      height: 22,
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      bgcolor: alpha(theme.palette.error.main, 0.1),
+                      color: 'error.main',
+                    }}
+                  />
                 </Box>
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: 'error.main', mb: 0.75 }}>
-                {formatCurrency(cards.outstanding_amount)}
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                <Chip
-                  label="Uncollected Fees"
-                  size="small"
+
+              {/* Dedicated Separate Breakdown: Tuition vs Bus */}
+              <Box
+                sx={{
+                  pt: 1.25,
+                  borderTop: `1px dashed ${theme.palette.divider}`,
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 1.25,
+                }}
+              >
+                <Box
                   sx={{
-                    height: 22,
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    bgcolor: alpha(theme.palette.error.main, 0.1),
-                    color: 'error.main',
+                    p: 1,
+                    borderRadius: 2,
+                    bgcolor: isDark ? alpha(theme.palette.primary.main, 0.12) : alpha(theme.palette.primary.main, 0.05),
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
                   }}
-                />
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: 'block',
+                      fontSize: '0.67rem',
+                      fontWeight: 700,
+                      color: 'primary.main',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.03em',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Tuition Due
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary', mt: 0.25, fontSize: '0.85rem' }}>
+                    {formatCurrency(cards.tuition_outstanding || 0)}
+                  </Typography>
+                </Box>
+
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 2,
+                    bgcolor: isDark ? alpha(theme.palette.warning.main, 0.12) : alpha(theme.palette.warning.main, 0.05),
+                    border: `1px solid ${alpha(theme.palette.warning.main, 0.22)}`,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: 'block',
+                      fontSize: '0.67rem',
+                      fontWeight: 700,
+                      color: 'warning.main',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.03em',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Bus Due
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary', mt: 0.25, fontSize: '0.85rem' }}>
+                    {formatCurrency(cards.bus_outstanding || 0)}
+                  </Typography>
+                </Box>
               </Box>
             </CardContent>
           </Card>

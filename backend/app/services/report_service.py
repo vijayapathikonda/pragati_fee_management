@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, case, or_
 from datetime import date
 from typing import Optional
 from decimal import Decimal
@@ -26,10 +26,13 @@ class ReportService:
             Student.last_name,
             Grade.name.label("grade"),
             Section.name.label("section"),
+            func.sum(case((FeeCategory.name.ilike('%tut%'), FeeAssignment.net_amount - FeeAssignment.paid_amount), else_=0)).label("tuition_balance"),
+            func.sum(case((or_(FeeCategory.name.ilike('%bus%'), FeeCategory.name.ilike('%transport%')), FeeAssignment.net_amount - FeeAssignment.paid_amount), else_=0)).label("bus_balance"),
             func.sum(FeeAssignment.net_amount).label("total_assigned"),
             func.sum(FeeAssignment.paid_amount).label("total_paid"),
             func.sum(FeeAssignment.net_amount - FeeAssignment.paid_amount).label("balance")
         ).join(FeeAssignment, FeeAssignment.student_id == Student.id)\
+         .join(FeeCategory, FeeCategory.id == FeeAssignment.fee_category_id)\
          .outerjoin(Grade, Grade.id == Student.grade_id)\
          .outerjoin(Section, Section.id == Student.section_id)
 
@@ -50,9 +53,11 @@ class ReportService:
             ReportColumn(field="name", headerName="Student Name"),
             ReportColumn(field="grade", headerName="Grade"),
             ReportColumn(field="section", headerName="Section"),
+            ReportColumn(field="tuition_balance", headerName="Tuition Due", type="number"),
+            ReportColumn(field="bus_balance", headerName="Bus Due", type="number"),
             ReportColumn(field="total_assigned", headerName="Total Assigned", type="number"),
             ReportColumn(field="total_paid", headerName="Total Paid", type="number"),
-            ReportColumn(field="balance", headerName="Balance", type="number"),
+            ReportColumn(field="balance", headerName="Total Balance", type="number"),
         ]
 
         rows = []
@@ -60,9 +65,11 @@ class ReportService:
             rows.append({
                 "id": i,
                 "admission_number": r.admission_number,
-                "name": f"{r.first_name} {r.last_name}",
+                "name": f"{r.first_name} {r.last_name or ''}".strip(),
                 "grade": r.grade or "-",
                 "section": r.section or "-",
+                "tuition_balance": ReportService._format_decimal(r.tuition_balance),
+                "bus_balance": ReportService._format_decimal(r.bus_balance),
                 "total_assigned": ReportService._format_decimal(r.total_assigned),
                 "total_paid": ReportService._format_decimal(r.total_paid),
                 "balance": ReportService._format_decimal(r.balance),

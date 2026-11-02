@@ -91,6 +91,8 @@ class StudentFeeSummary(BaseModel):
     total_assigned: Decimal
     total_paid: Decimal
     total_outstanding: Decimal
+    tuition_outstanding: Decimal = Decimal('0.00')
+    bus_outstanding: Decimal = Decimal('0.00')
 
 # Receipt Schemas
 

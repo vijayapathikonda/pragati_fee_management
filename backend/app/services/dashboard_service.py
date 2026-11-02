@@ -91,6 +91,26 @@ class DashboardService:
             q_outstanding = q_outstanding.join(Student, Student.id == FeeAssignment.student_id).filter(*student_filters)
         outstanding_amount = get_decimal(q_outstanding.scalar())
 
+        # Category Outstanding (used for both Cards breakdown and Chart)
+        q_cat_out = db.query(FeeCategory.name, func.sum(FeeAssignment.net_amount - FeeAssignment.paid_amount)).join(FeeCategory).filter(*assignment_filters)
+        if student_filters:
+             q_cat_out = q_cat_out.join(Student, Student.id == FeeAssignment.student_id).filter(*student_filters)
+        cat_out_res = q_cat_out.group_by(FeeCategory.name).all()
+        cat_out_data = ChartData(
+            labels=[r[0] for r in cat_out_res],
+            series=[float(r[1]) for r in cat_out_res]
+        )
+
+        tuition_outstanding = Decimal("0.00")
+        bus_outstanding = Decimal("0.00")
+        for cat_name, amt in cat_out_res:
+            amt_dec = get_decimal(amt)
+            c_name_lower = (cat_name or "").lower()
+            if "tut" in c_name_lower:
+                tuition_outstanding += amt_dec
+            elif "bus" in c_name_lower or "transport" in c_name_lower:
+                bus_outstanding += amt_dec
+
         cards = DashboardCards(
             total_students=total_students,
             active_students=active_students,
@@ -98,6 +118,8 @@ class DashboardService:
             monthly_collection=monthly_collection,
             yearly_collection=yearly_collection,
             outstanding_amount=outstanding_amount,
+            tuition_outstanding=tuition_outstanding,
+            bus_outstanding=bus_outstanding,
             total_receipts=total_receipts
         )
 
@@ -117,16 +139,6 @@ class DashboardService:
         cat_col_data = ChartData(
             labels=[r[0] for r in cat_col_res],
             series=[float(r[1]) for r in cat_col_res]
-        )
-
-        # Category Outstanding
-        q_cat_out = db.query(FeeCategory.name, func.sum(FeeAssignment.net_amount - FeeAssignment.paid_amount)).join(FeeCategory).filter(*assignment_filters)
-        if student_filters:
-             q_cat_out = q_cat_out.join(Student, Student.id == FeeAssignment.student_id).filter(*student_filters)
-        cat_out_res = q_cat_out.group_by(FeeCategory.name).all()
-        cat_out_data = ChartData(
-            labels=[r[0] for r in cat_out_res],
-            series=[float(r[1]) for r in cat_out_res]
         )
 
         # Daily Collection (Last 7 Days)
@@ -235,4 +247,3 @@ class DashboardService:
         summary_res = DashboardSummary(cards=cards, charts=charts, lists=lists)
         DashboardService._summary_cache[cache_key] = (summary_res, now_ts)
         return summary_res
-

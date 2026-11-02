@@ -9,6 +9,8 @@ class DashboardCards(BaseModel):
     monthly_collection: Decimal
     yearly_collection: Decimal
     outstanding_amount: Decimal
+    tuition_outstanding: Decimal = Decimal("0.00")
+    bus_outstanding: Decimal = Decimal("0.00")
     total_receipts: int
 
 class ChartSeries(BaseModel):
